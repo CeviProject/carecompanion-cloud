@@ -1,12 +1,14 @@
 
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, X } from 'lucide-react';
+import { Menu, X, LogOut, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/context/AuthContext';
 
 const Navbar = () => {
   const location = useLocation();
+  const { user, profile, signOut } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const isActive = (path: string) => {
@@ -15,6 +17,11 @@ const Navbar = () => {
 
   const toggleMenu = () => {
     setIsMenuOpen(!isMenuOpen);
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
+    setIsMenuOpen(false);
   };
 
   return (
@@ -40,6 +47,28 @@ const Navbar = () => {
             >
               Home
             </Link>
+            {user && profile?.role === 'patient' && (
+              <Link 
+                to="/dashboard/patient" 
+                className={cn(
+                  "text-sm font-medium transition-colors hover:text-primary",
+                  isActive("/dashboard/patient") ? "text-primary" : "text-foreground/80"
+                )}
+              >
+                Dashboard
+              </Link>
+            )}
+            {user && profile?.role === 'doctor' && (
+              <Link 
+                to="/dashboard/doctor" 
+                className={cn(
+                  "text-sm font-medium transition-colors hover:text-primary",
+                  isActive("/dashboard/doctor") ? "text-primary" : "text-foreground/80"
+                )}
+              >
+                Dashboard
+              </Link>
+            )}
             <Link 
               to="/about" 
               className={cn(
@@ -62,12 +91,31 @@ const Navbar = () => {
 
           {/* Authentication buttons */}
           <div className="hidden md:flex items-center space-x-4">
-            <Button asChild variant="outline" className="rounded-full">
-              <Link to="/auth/login">Sign In</Link>
-            </Button>
-            <Button asChild className="rounded-full">
-              <Link to="/auth/register">Sign Up</Link>
-            </Button>
+            {user ? (
+              <>
+                <div className="text-sm font-medium">
+                  Hello, {profile?.first_name || 'User'}
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="rounded-full" 
+                  onClick={handleSignOut}
+                >
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Sign Out
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button asChild variant="outline" className="rounded-full">
+                  <Link to="/auth/login">Sign In</Link>
+                </Button>
+                <Button asChild className="rounded-full">
+                  <Link to="/auth/register">Sign Up</Link>
+                </Button>
+              </>
+            )}
           </div>
 
           {/* Mobile menu button */}
@@ -102,6 +150,30 @@ const Navbar = () => {
             >
               Home
             </Link>
+            {user && profile?.role === 'patient' && (
+              <Link 
+                to="/dashboard/patient" 
+                className={cn(
+                  "block px-3 py-2 rounded-md text-base font-medium focus-ring",
+                  isActive("/dashboard/patient") ? "text-primary" : "text-foreground/80 hover:text-primary"
+                )}
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Dashboard
+              </Link>
+            )}
+            {user && profile?.role === 'doctor' && (
+              <Link 
+                to="/dashboard/doctor" 
+                className={cn(
+                  "block px-3 py-2 rounded-md text-base font-medium focus-ring",
+                  isActive("/dashboard/doctor") ? "text-primary" : "text-foreground/80 hover:text-primary"
+                )}
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Dashboard
+              </Link>
+            )}
             <Link
               to="/about"
               className={cn(
@@ -125,18 +197,37 @@ const Navbar = () => {
           </div>
           <div className="pt-4 pb-3 border-t border-border">
             <div className="flex items-center px-5">
-              <div className="flex-shrink-0">
-                <Button asChild className="w-full mb-2" variant="outline">
-                  <Link to="/auth/login" onClick={() => setIsMenuOpen(false)}>
-                    Sign In
-                  </Link>
-                </Button>
-                <Button asChild className="w-full">
-                  <Link to="/auth/register" onClick={() => setIsMenuOpen(false)}>
-                    Sign Up
-                  </Link>
-                </Button>
-              </div>
+              {user ? (
+                <div className="w-full space-y-2">
+                  <div className="flex items-center">
+                    <User className="h-5 w-5 mr-2" />
+                    <div className="text-base font-medium">
+                      {profile?.first_name} {profile?.last_name}
+                    </div>
+                  </div>
+                  <Button 
+                    onClick={handleSignOut}
+                    variant="outline"
+                    className="w-full"
+                  >
+                    <LogOut className="h-4 w-4 mr-2" />
+                    Sign Out
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex-shrink-0 w-full space-y-2">
+                  <Button asChild className="w-full mb-2" variant="outline">
+                    <Link to="/auth/login" onClick={() => setIsMenuOpen(false)}>
+                      Sign In
+                    </Link>
+                  </Button>
+                  <Button asChild className="w-full">
+                    <Link to="/auth/register" onClick={() => setIsMenuOpen(false)}>
+                      Sign Up
+                    </Link>
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
         </div>

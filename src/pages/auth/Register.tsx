@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { Lock, Mail, User, Stethoscope, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,9 +9,10 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import { toast } from 'sonner';
+import { useAuth } from '@/context/AuthContext';
 
 const Register = () => {
-  const navigate = useNavigate();
+  const { signUp } = useAuth();
   const location = useLocation();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -55,15 +56,29 @@ const Register = () => {
     }
     
     setIsLoading(true);
+
+    // Split name into first and last name
+    const nameParts = name.split(' ');
+    const firstName = nameParts[0];
+    const lastName = nameParts.slice(1).join(' ');
     
-    // Simulate registration process
-    setTimeout(() => {
-      setIsLoading(false);
-      toast.success('Registration successful!');
+    try {
+      const userData = {
+        first_name: firstName,
+        last_name: lastName || '',
+        role: role,
+        specialty: role === 'doctor' ? specialty : null,
+        age: role === 'patient' ? parseInt(age) : null
+      };
       
-      // Redirect based on role
-      navigate(role === 'patient' ? '/dashboard/patient' : '/dashboard/doctor');
-    }, 1500);
+      await signUp(email, password, userData);
+      // The auth context will handle navigation and success toasts
+    } catch (error) {
+      console.error('Registration error:', error);
+      // Error is already handled in the AuthContext
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

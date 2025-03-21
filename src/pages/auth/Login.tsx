@@ -1,6 +1,6 @@
 
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { Lock, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,9 +8,10 @@ import { Label } from '@/components/ui/label';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import { toast } from 'sonner';
+import { useAuth } from '@/context/AuthContext';
 
 const Login = () => {
-  const navigate = useNavigate();
+  const { signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -25,15 +26,15 @@ const Login = () => {
     
     setIsLoading(true);
     
-    // Simulate login process
-    setTimeout(() => {
+    try {
+      await signIn(email, password);
+      // No need to navigate, AuthContext will handle it
+    } catch (error) {
+      console.error('Login error:', error);
+      // Error is already handled in the AuthContext
+    } finally {
       setIsLoading(false);
-      toast.success('Login successful!');
-      
-      // Determine redirect based on role (this would be handled by your auth system)
-      // For now, we'll just redirect to the patient dashboard
-      navigate('/dashboard/patient');
-    }, 1500);
+    }
   };
 
   return (

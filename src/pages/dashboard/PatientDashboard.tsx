@@ -1,334 +1,351 @@
 
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { 
-  Bell, 
-  Calendar, 
-  Clock, 
-  Layout, 
-  Lightbulb,
-  LogOut, 
-  MessageSquare, 
-  PillIcon,
-  Search, 
-  Settings, 
-  User 
-} from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Separator } from '@/components/ui/separator';
-import { toast } from 'sonner';
+import { Pill, Calendar, Clock, User, History } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import HealthQueryForm from '@/components/patient/HealthQueryForm';
+import HealthAssessment from '@/components/patient/HealthAssessment';
+import DoctorRecommendations from '@/components/patient/DoctorRecommendations';
+import Navbar from '@/components/layout/Navbar';
+import Footer from '@/components/layout/Footer';
 
 const PatientDashboard = () => {
-  const [healthQuery, setHealthQuery] = useState('');
-  const [isAssessing, setIsAssessing] = useState(false);
+  const { user, profile } = useAuth();
+  const [activeTab, setActiveTab] = useState('overview');
+  const [pastQueries, setPastQueries] = useState<any[]>([]);
+  const [appointments, setAppointments] = useState<any[]>([]);
+  const [currentAssessment, setCurrentAssessment] = useState<string | null>(null);
+  const [suggestedSpecialties, setSuggestedSpecialties] = useState<string[] | null>(null);
+  const [loadingQueries, setLoadingQueries] = useState(true);
+  const [loadingAppointments, setLoadingAppointments] = useState(true);
 
-  const handleHealthQuery = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!healthQuery) {
-      toast.error('Please enter a health query');
-      return;
+  useEffect(() => {
+    if (user) {
+      fetchPastQueries();
+      fetchAppointments();
     }
-    
-    setIsAssessing(true);
-    
-    // Simulate AI assessment
-    setTimeout(() => {
-      setIsAssessing(false);
-      toast.success('Assessment complete!');
+  }, [user]);
+
+  const fetchPastQueries = async () => {
+    setLoadingQueries(true);
+    try {
+      const { data, error } = await supabase
+        .from('health_queries')
+        .select('*')
+        .eq('patient_id', user?.id)
+        .order('created_at', { ascending: false });
       
-      // In a real app, this would show results and doctor recommendations
-    }, 2000);
+      if (error) throw error;
+      setPastQueries(data || []);
+    } catch (error) {
+      console.error('Error fetching past queries:', error);
+    } finally {
+      setLoadingQueries(false);
+    }
+  };
+
+  const fetchAppointments = async () => {
+    setLoadingAppointments(true);
+    try {
+      const { data, error } = await supabase
+        .from('appointments')
+        .select(`
+          *,
+          doctor:doctor_id(
+            id,
+            first_name,
+            last_name
+          )
+        `)
+        .eq('patient_id', user?.id)
+        .order('date', { ascending: true });
+      
+      if (error) throw error;
+      setAppointments(data || []);
+    } catch (error) {
+      console.error('Error fetching appointments:', error);
+    } finally {
+      setLoadingAppointments(false);
+    }
+  };
+
+  const handleQuerySubmitted = (queryData: any) => {
+    // Update the UI with the new query
+    setPastQueries([queryData, ...pastQueries]);
+    setCurrentAssessment(queryData.ai_assessment);
+    setSuggestedSpecialties(queryData.suggestedSpecialties);
+    // Switch to the assessment tab
+    setActiveTab('assessment');
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleString();
   };
 
   return (
-    <div className="min-h-screen bg-background/50">
-      {/* Dashboard Layout */}
-      <div className="flex h-screen">
-        {/* Sidebar */}
-        <aside className="w-64 bg-card border-r border-border hidden md:block animate-slide-down">
-          <div className="p-6">
-            <Link to="/" className="flex items-center gap-2">
-              <span className="text-primary text-xl font-semibold">VirtualHealth</span>
-            </Link>
+    <div className="min-h-screen flex flex-col">
+      <Navbar />
+      
+      <main className="flex-grow pt-20 pb-16">
+        <div className="container px-4 sm:px-6 lg:px-8 mx-auto">
+          <div className="flex flex-col md:flex-row md:items-end justify-between mb-8">
+            <div>
+              <h1 className="text-3xl font-bold mb-2">Patient Dashboard</h1>
+              <p className="text-muted-foreground">
+                Welcome back, {profile?.first_name || 'Patient'}
+              </p>
+            </div>
+            <div className="mt-4 md:mt-0">
+              <Button className="rounded-full" asChild>
+                <a href="#health-query">New Health Query</a>
+              </Button>
+            </div>
           </div>
           
-          <nav className="mt-6 px-3 space-y-1">
-            <NavItem icon={Layout} href="/dashboard/patient" label="Dashboard" active />
-            <NavItem icon={Calendar} href="/dashboard/patient/appointments" label="Appointments" />
-            <NavItem icon={PillIcon} href="/dashboard/patient/medications" label="Medications" />
-            <NavItem icon={MessageSquare} href="/dashboard/patient/messages" label="Messages" />
-            <NavItem icon={Lightbulb} href="/dashboard/patient/health-tips" label="Health Tips" />
-            <NavItem icon={User} href="/dashboard/patient/profile" label="Profile" />
-            <NavItem icon={Settings} href="/dashboard/patient/settings" label="Settings" />
-          </nav>
-          
-          <div className="mt-auto p-4 absolute bottom-0 left-0 right-0 border-t border-border">
-            <Button 
-              variant="ghost" 
-              className="w-full justify-start text-muted-foreground hover:text-destructive"
-              onClick={() => {
-                toast.success('Logged out successfully');
-                // In a real app, this would log the user out
-              }}
-            >
-              <LogOut className="h-5 w-5 mr-2" />
-              Log Out
-            </Button>
-          </div>
-        </aside>
-        
-        {/* Main Content */}
-        <main className="flex-1 overflow-auto">
-          {/* Top Navigation */}
-          <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-md border-b border-border">
-            <div className="flex items-center justify-between p-4">
-              <h1 className="text-2xl font-semibold animate-fade-in">Patient Dashboard</h1>
-              
-              <div className="flex items-center space-x-4">
-                <Button variant="outline" size="icon" className="rounded-full relative">
-                  <Bell className="h-5 w-5" />
-                  <span className="absolute -top-1 -right-1 bg-primary text-primary-foreground w-5 h-5 rounded-full text-xs flex items-center justify-center">
-                    3
-                  </span>
-                </Button>
-                
-                <div className="flex items-center space-x-2">
-                  <Avatar>
-                    <AvatarImage src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=60&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Mnx8cG9ydHJhaXR8ZW58MHx8MHx8fDA%3D" />
-                    <AvatarFallback>JD</AvatarFallback>
-                  </Avatar>
-                  <div className="hidden md:block">
-                    <p className="text-sm font-medium">Jane Doe</p>
-                    <p className="text-xs text-muted-foreground">Patient</p>
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
+            <TabsList className="w-full md:w-auto rounded-full p-1 bg-muted/50">
+              <TabsTrigger value="overview" className="rounded-full">
+                Overview
+              </TabsTrigger>
+              <TabsTrigger value="assessment" className="rounded-full">
+                Health Assessment
+              </TabsTrigger>
+              <TabsTrigger value="appointments" className="rounded-full">
+                Appointments
+              </TabsTrigger>
+              <TabsTrigger value="history" className="rounded-full">
+                History
+              </TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="overview" className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <Card className="glass-card p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-xl font-semibold">Recent Assessment</h2>
+                    <Pill className="h-5 w-5 text-primary" />
                   </div>
+                  
+                  {loadingQueries ? (
+                    <p className="text-muted-foreground">Loading...</p>
+                  ) : pastQueries.length > 0 ? (
+                    <>
+                      <p className="text-sm line-clamp-3 mb-2">{pastQueries[0].ai_assessment}</p>
+                      <p className="text-xs text-muted-foreground">{formatDate(pastQueries[0].created_at)}</p>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="mt-4 w-full rounded-full"
+                        onClick={() => {
+                          setCurrentAssessment(pastQueries[0].ai_assessment);
+                          setActiveTab('assessment');
+                        }}
+                      >
+                        View Details
+                      </Button>
+                    </>
+                  ) : (
+                    <p className="text-muted-foreground">No health assessments yet</p>
+                  )}
+                </Card>
+                
+                <Card className="glass-card p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-xl font-semibold">Upcoming Appointment</h2>
+                    <Calendar className="h-5 w-5 text-primary" />
+                  </div>
+                  
+                  {loadingAppointments ? (
+                    <p className="text-muted-foreground">Loading...</p>
+                  ) : appointments.length > 0 ? (
+                    <>
+                      <p className="font-medium mb-1">
+                        Dr. {appointments[0].doctor.first_name} {appointments[0].doctor.last_name}
+                      </p>
+                      <div className="flex items-center text-sm text-muted-foreground mb-1">
+                        <Clock className="h-4 w-4 mr-1" />
+                        {new Date(appointments[0].date).toLocaleString()}
+                      </div>
+                      <p className="text-sm mt-2">{appointments[0].reason}</p>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="mt-4 w-full rounded-full"
+                        onClick={() => setActiveTab('appointments')}
+                      >
+                        View All Appointments
+                      </Button>
+                    </>
+                  ) : (
+                    <p className="text-muted-foreground">No upcoming appointments</p>
+                  )}
+                </Card>
+                
+                <Card className="glass-card p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-xl font-semibold">Health Tips</h2>
+                    <User className="h-5 w-5 text-primary" />
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <h3 className="font-medium text-sm">Stay Hydrated</h3>
+                      <p className="text-xs text-muted-foreground">Drink at least 8 glasses of water daily.</p>
+                    </div>
+                    <div>
+                      <h3 className="font-medium text-sm">Regular Exercise</h3>
+                      <p className="text-xs text-muted-foreground">Aim for 30 minutes of moderate activity daily.</p>
+                    </div>
+                    <div>
+                      <h3 className="font-medium text-sm">Balanced Diet</h3>
+                      <p className="text-xs text-muted-foreground">Include fruits, vegetables, whole grains, and lean proteins.</p>
+                    </div>
+                  </div>
+                </Card>
+              </div>
+              
+              <div id="health-query">
+                <HealthQueryForm onQuerySubmitted={handleQuerySubmitted} />
+              </div>
+            </TabsContent>
+            
+            <TabsContent value="assessment" className="space-y-6">
+              <div className="space-y-6">
+                <HealthAssessment 
+                  assessment={currentAssessment}
+                  suggestedSpecialties={suggestedSpecialties}
+                />
+                
+                <DoctorRecommendations 
+                  suggestedSpecialties={suggestedSpecialties}
+                />
+                
+                <div>
+                  <HealthQueryForm onQuerySubmitted={handleQuerySubmitted} />
                 </div>
               </div>
-            </div>
-          </header>
-          
-          {/* Dashboard Content */}
-          <div className="p-6 animate-slide-up">
-            {/* Health Query Section */}
-            <section className="mb-10">
-              <Card className="glass-card">
-                <CardHeader>
-                  <CardTitle>How are you feeling today?</CardTitle>
-                  <CardDescription>
-                    Describe your symptoms and we'll assess your condition
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <form onSubmit={handleHealthQuery} className="space-y-4">
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <Search className="h-5 w-5 text-muted-foreground" />
-                      </div>
-                      <Input
-                        type="text"
-                        placeholder="E.g., I've been experiencing headaches for the past two days..."
-                        className="pl-10"
-                        value={healthQuery}
-                        onChange={(e) => setHealthQuery(e.target.value)}
-                      />
-                    </div>
-                    <Button 
-                      type="submit" 
-                      className="rounded-full"
-                      disabled={isAssessing}
-                    >
-                      {isAssessing ? 'Assessing...' : 'Assess My Condition'}
-                    </Button>
-                  </form>
-                </CardContent>
-              </Card>
-            </section>
+            </TabsContent>
             
-            {/* Dashboard Overview */}
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {/* Upcoming Appointments */}
-              <Card className="glass-card">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Calendar className="h-5 w-5 text-primary" />
-                    Upcoming Appointments
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {upcomingAppointments.length > 0 ? (
-                    <div className="space-y-4">
-                      {upcomingAppointments.map((appointment, index) => (
-                        <div key={index} className="flex items-start gap-3">
-                          <div className="w-10 h-10 bg-accent rounded-full flex items-center justify-center flex-shrink-0">
-                            <Calendar className="h-5 w-5 text-primary" />
-                          </div>
-                          <div>
-                            <p className="font-medium">{appointment.doctorName}</p>
-                            <p className="text-sm text-muted-foreground">{appointment.specialty}</p>
-                            <div className="flex items-center text-sm text-muted-foreground mt-1">
-                              <Clock className="h-4 w-4 mr-1" />
-                              {appointment.datetime}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center py-6">
-                      <p className="text-muted-foreground">No upcoming appointments</p>
-                      <Button asChild className="mt-4 rounded-full" variant="outline">
-                        <Link to="/dashboard/patient/appointments">Book Appointment</Link>
-                      </Button>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-              
-              {/* Medication Reminders */}
-              <Card className="glass-card">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <PillIcon className="h-5 w-5 text-primary" />
-                    Medication Reminders
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {medications.length > 0 ? (
-                    <div className="space-y-4">
-                      {medications.map((medication, index) => (
-                        <div key={index} className="flex items-start gap-3">
-                          <div className="w-10 h-10 bg-accent rounded-full flex items-center justify-center flex-shrink-0">
-                            <PillIcon className="h-5 w-5 text-primary" />
-                          </div>
-                          <div>
-                            <p className="font-medium">{medication.name}</p>
-                            <p className="text-sm text-muted-foreground">{medication.dosage}</p>
-                            <div className="flex items-center text-sm text-muted-foreground mt-1">
-                              <Clock className="h-4 w-4 mr-1" />
-                              {medication.schedule}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center py-6">
-                      <p className="text-muted-foreground">No medication reminders set</p>
-                      <Button asChild className="mt-4 rounded-full" variant="outline">
-                        <Link to="/dashboard/patient/medications">Add Medication</Link>
-                      </Button>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-              
-              {/* Health Tips */}
-              <Card className="glass-card">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Lightbulb className="h-5 w-5 text-primary" />
-                    Health Tips
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
+            <TabsContent value="appointments" className="space-y-6">
+              <Card className="glass-card p-6">
+                <h2 className="text-xl font-semibold mb-4">Your Appointments</h2>
+                
+                {loadingAppointments ? (
+                  <div className="py-8 text-center">
+                    <p className="text-muted-foreground">Loading appointments...</p>
+                  </div>
+                ) : appointments.length === 0 ? (
+                  <div className="py-8 text-center">
+                    <p className="text-muted-foreground mb-4">No appointments scheduled</p>
+                    <Button className="rounded-full">Schedule an Appointment</Button>
+                  </div>
+                ) : (
                   <div className="space-y-4">
-                    {healthTips.map((tip, index) => (
-                      <div key={index} className="flex items-start gap-3">
-                        <div className="w-10 h-10 bg-accent rounded-full flex items-center justify-center flex-shrink-0">
-                          <Lightbulb className="h-5 w-5 text-primary" />
-                        </div>
-                        <div>
-                          <p className="font-medium">{tip.title}</p>
-                          <p className="text-sm text-muted-foreground">{tip.content}</p>
+                    {appointments.map((appointment) => (
+                      <div key={appointment.id} className="border rounded-lg p-4 bg-card/50">
+                        <div className="flex justify-between">
+                          <div>
+                            <h3 className="font-medium">
+                              Dr. {appointment.doctor.first_name} {appointment.doctor.last_name}
+                            </h3>
+                            <div className="flex items-center text-sm text-muted-foreground mt-1">
+                              <Calendar className="h-4 w-4 mr-1" />
+                              {new Date(appointment.date).toLocaleDateString()}
+                              <Clock className="h-4 w-4 ml-3 mr-1" />
+                              {new Date(appointment.date).toLocaleTimeString()}
+                            </div>
+                            {appointment.reason && (
+                              <p className="mt-2 text-sm">{appointment.reason}</p>
+                            )}
+                          </div>
+                          <div className="flex items-start">
+                            <Badge status={appointment.status} />
+                          </div>
                         </div>
                       </div>
                     ))}
                   </div>
-                </CardContent>
+                )}
               </Card>
-            </div>
-          </div>
-        </main>
-      </div>
+            </TabsContent>
+            
+            <TabsContent value="history" className="space-y-6">
+              <Card className="glass-card p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-semibold">Health Query History</h2>
+                  <History className="h-5 w-5 text-primary" />
+                </div>
+                
+                {loadingQueries ? (
+                  <div className="py-8 text-center">
+                    <p className="text-muted-foreground">Loading history...</p>
+                  </div>
+                ) : pastQueries.length === 0 ? (
+                  <div className="py-8 text-center">
+                    <p className="text-muted-foreground mb-4">No health queries yet</p>
+                    <Button 
+                      className="rounded-full"
+                      onClick={() => setActiveTab('overview')}
+                    >
+                      Create Health Query
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {pastQueries.map((query) => (
+                      <div key={query.id} className="border rounded-lg p-4 bg-card/50">
+                        <p className="text-sm font-medium mb-2">{query.query_text}</p>
+                        <div className="border-l-4 border-primary pl-3 py-1 mb-2">
+                          <p className="text-xs">{query.ai_assessment}</p>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {formatDate(query.created_at)}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </div>
+      </main>
+      
+      <Footer />
     </div>
   );
 };
 
-// NavItem component
-const NavItem = ({ 
-  icon: Icon, 
-  href, 
-  label, 
-  active = false 
-}: { 
-  icon: React.ElementType;
-  href: string;
-  label: string;
-  active?: boolean;
-}) => {
+// Badge component for appointment status
+const Badge = ({ status }: { status: string }) => {
+  let color = '';
+  
+  switch (status) {
+    case 'scheduled':
+      color = 'bg-blue-100 text-blue-800';
+      break;
+    case 'completed':
+      color = 'bg-green-100 text-green-800';
+      break;
+    case 'cancelled':
+      color = 'bg-red-100 text-red-800';
+      break;
+    case 'pending':
+      color = 'bg-yellow-100 text-yellow-800';
+      break;
+    default:
+      color = 'bg-gray-100 text-gray-800';
+  }
+  
   return (
-    <Link
-      to={href}
-      className={`flex items-center px-3 py-2 text-sm rounded-md transition-colors ${
-        active
-          ? 'bg-primary text-primary-foreground'
-          : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
-      }`}
-    >
-      <Icon className="h-5 w-5 mr-3" />
-      {label}
-    </Link>
+    <span className={`px-2 py-1 rounded-full text-xs font-medium ${color}`}>
+      {status.charAt(0).toUpperCase() + status.slice(1)}
+    </span>
   );
 };
-
-// Sample data for the dashboard
-const upcomingAppointments = [
-  {
-    doctorName: 'Dr. Sarah Johnson',
-    specialty: 'Cardiologist',
-    datetime: 'Tuesday, May 10 • 2:00 PM',
-  },
-  {
-    doctorName: 'Dr. Michael Chen',
-    specialty: 'Neurologist',
-    datetime: 'Friday, May 20 • 10:30 AM',
-  },
-];
-
-const medications = [
-  {
-    name: 'Lisinopril',
-    dosage: '10mg • 1 tablet',
-    schedule: 'Daily at 8:00 AM',
-  },
-  {
-    name: 'Metformin',
-    dosage: '500mg • 2 tablets',
-    schedule: 'Twice daily with meals',
-  },
-  {
-    name: 'Atorvastatin',
-    dosage: '20mg • 1 tablet',
-    schedule: 'Daily at bedtime',
-  },
-];
-
-const healthTips = [
-  {
-    title: 'Stay Hydrated',
-    content: 'Drink at least 8 glasses of water daily to maintain proper hydration.',
-  },
-  {
-    title: 'Regular Exercise',
-    content: 'Aim for at least 30 minutes of moderate activity most days of the week.',
-  },
-  {
-    title: 'Balanced Diet',
-    content: 'Include fruits, vegetables, whole grains, and lean proteins in your meals.',
-  },
-];
 
 export default PatientDashboard;
