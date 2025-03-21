@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
+import { Loader2 } from 'lucide-react';
 
 interface HealthQueryFormProps {
   onQuerySubmitted: (queryData: any) => void;
@@ -30,14 +31,19 @@ const HealthQueryForm = ({ onQuerySubmitted }: HealthQueryFormProps) => {
     }
     
     setIsLoading(true);
+    toast.info('Processing your health query with AI...');
     
     try {
-      // First, call our AI assessment edge function
+      // Call the Gemini-powered health assessment edge function
       const { data: aiData, error: aiError } = await supabase.functions.invoke('health-assessment', {
         body: { healthQuery: queryText }
       });
       
       if (aiError) throw aiError;
+      
+      if (!aiData) {
+        throw new Error('No data returned from the health assessment');
+      }
       
       // Save the query and AI assessment to the database
       const { data: queryData, error: queryError } = await supabase
@@ -52,7 +58,7 @@ const HealthQueryForm = ({ onQuerySubmitted }: HealthQueryFormProps) => {
       
       if (queryError) throw queryError;
       
-      toast.success('Your health query has been submitted');
+      toast.success('Your health query has been analyzed');
       setQueryText('');
       
       // Pass the query data, AI assessment, and suggested specialties to the parent component
@@ -84,6 +90,7 @@ const HealthQueryForm = ({ onQuerySubmitted }: HealthQueryFormProps) => {
             onChange={(e) => setQueryText(e.target.value)}
             className="resize-none"
             required
+            disabled={isLoading}
           />
         </div>
         
@@ -92,7 +99,14 @@ const HealthQueryForm = ({ onQuerySubmitted }: HealthQueryFormProps) => {
           className="w-full rounded-full" 
           disabled={isLoading}
         >
-          {isLoading ? 'Processing...' : 'Get AI Assessment'}
+          {isLoading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Analyzing with Gemini AI...
+            </>
+          ) : (
+            'Get AI Assessment'
+          )}
         </Button>
         
         <p className="text-xs text-muted-foreground text-center mt-2">
