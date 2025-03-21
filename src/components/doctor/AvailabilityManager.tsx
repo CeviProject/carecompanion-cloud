@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { Json } from '@/integrations/supabase/types';
 
 interface TimeSlot {
   startTime: string;
@@ -20,17 +21,19 @@ const daysOfWeek: WeekDay[] = [
   'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'
 ];
 
+const defaultAvailability: Record<WeekDay, TimeSlot[]> = {
+  monday: [],
+  tuesday: [],
+  wednesday: [],
+  thursday: [],
+  friday: [],
+  saturday: [],
+  sunday: []
+};
+
 const AvailabilityManager = () => {
   const { user } = useAuth();
-  const [availability, setAvailability] = useState<Record<WeekDay, TimeSlot[]>>({
-    monday: [],
-    tuesday: [],
-    wednesday: [],
-    thursday: [],
-    friday: [],
-    saturday: [],
-    sunday: []
-  });
+  const [availability, setAvailability] = useState<Record<WeekDay, TimeSlot[]>>(defaultAvailability);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -51,7 +54,27 @@ const AvailabilityManager = () => {
       if (error) throw error;
       
       if (data && data.availability) {
-        setAvailability(data.availability as Record<WeekDay, TimeSlot[]>);
+        // Cast the JSON data to our expected type with proper validation
+        try {
+          const availData = data.availability as Record<string, any>;
+          // Ensure we have proper structure before setting state
+          const parsedAvailability = { ...defaultAvailability };
+          
+          // Iterate through each day and validate its structure
+          daysOfWeek.forEach(day => {
+            if (Array.isArray(availData[day])) {
+              parsedAvailability[day] = availData[day].map((slot: any) => ({
+                startTime: typeof slot.startTime === 'string' ? slot.startTime : '09:00',
+                endTime: typeof slot.endTime === 'string' ? slot.endTime : '17:00'
+              }));
+            }
+          });
+          
+          setAvailability(parsedAvailability);
+        } catch (parseError) {
+          console.error('Error parsing availability data:', parseError);
+          setAvailability(defaultAvailability);
+        }
       }
     } catch (error) {
       console.error('Error fetching availability:', error);
@@ -89,9 +112,20 @@ const AvailabilityManager = () => {
     setSaving(true);
     
     try {
+      // Convert our strongly typed data to Json compatible format
+      const availabilityJson = {} as Record<string, any>;
+      
+      // Create a structure that matches what Supabase expects
+      Object.keys(availability).forEach(day => {
+        availabilityJson[day] = availability[day as WeekDay].map(slot => ({
+          startTime: slot.startTime,
+          endTime: slot.endTime
+        }));
+      });
+      
       const { error } = await supabase
         .from('doctor_profiles')
-        .update({ availability })
+        .update({ availability: availabilityJson })
         .eq('id', user.id);
       
       if (error) throw error;

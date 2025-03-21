@@ -10,16 +10,18 @@ interface DoctorRecommendationsProps {
   suggestedSpecialties: string[] | null;
 }
 
+interface DoctorProfile {
+  specialty: string;
+  location: string | null;
+  years_experience: number | null;
+  bio: string | null;
+}
+
 interface Doctor {
   id: string;
   first_name: string;
   last_name: string;
-  doctor_profile: {
-    specialty: string;
-    location: string | null;
-    years_experience: number | null;
-    bio: string | null;
-  };
+  doctor_profile: DoctorProfile;
 }
 
 const DoctorRecommendations = ({ suggestedSpecialties }: DoctorRecommendationsProps) => {
@@ -36,35 +38,52 @@ const DoctorRecommendations = ({ suggestedSpecialties }: DoctorRecommendationsPr
       setLoading(true);
       
       try {
-        // Fetch doctors that match the suggested specialties
-        const { data, error } = await supabase
-          .from('profiles')
-          .select(`
-            id,
-            first_name,
-            last_name,
-            doctor_profile (
-              specialty,
-              location,
-              years_experience,
-              bio
+        // First fetch doctor profiles that match specialties
+        const { data: doctorProfilesData, error: doctorProfilesError } = await supabase
+          .from('doctor_profiles')
+          .select('id, specialty, location, years_experience, bio');
+        
+        if (doctorProfilesError) throw doctorProfilesError;
+        
+        if (!doctorProfilesData || doctorProfilesData.length === 0) {
+          setDoctors([]);
+          setLoading(false);
+          return;
+        }
+        
+        // Filter doctor profiles by specialty
+        const filteredProfileIds = doctorProfilesData
+          .filter(profile => 
+            suggestedSpecialties.some(specialty => 
+              profile.specialty.toLowerCase().includes(specialty.toLowerCase())
             )
-          `)
-          .eq('role', 'doctor')
-          .not('doctor_profile', 'is', null);
+          )
+          .map(profile => profile.id);
         
-        if (error) throw error;
+        if (filteredProfileIds.length === 0) {
+          setDoctors([]);
+          setLoading(false);
+          return;
+        }
         
-        // Filter doctors to match the suggested specialties
-        const filteredDoctors = data.filter(doctor => {
-          if (!doctor.doctor_profile) return false;
-          
-          return suggestedSpecialties.some(specialty => 
-            doctor.doctor_profile.specialty.toLowerCase().includes(specialty.toLowerCase())
-          );
-        }) as Doctor[];
+        // Get the user profile info for the filtered doctors
+        const { data: doctorsData, error: doctorsError } = await supabase
+          .from('profiles')
+          .select('id, first_name, last_name')
+          .in('id', filteredProfileIds);
         
-        setDoctors(filteredDoctors);
+        if (doctorsError) throw doctorsError;
+        
+        // Combine the profile data with doctor profile data
+        const combinedDoctors = doctorsData.map(doctor => {
+          const doctorProfile = doctorProfilesData.find(profile => profile.id === doctor.id);
+          return {
+            ...doctor,
+            doctor_profile: doctorProfile as DoctorProfile
+          };
+        });
+        
+        setDoctors(combinedDoctors);
       } catch (error) {
         console.error('Error fetching doctor recommendations:', error);
         toast.error('Failed to load doctor recommendations');
