@@ -20,6 +20,15 @@ const HealthAssessment = ({ assessment, suggestedSpecialties }: HealthAssessment
         return <h3 key={index} className="text-md font-medium mt-4 mb-2">{paragraph}</h3>;
       }
       
+      // Check if it's a bullet point (asterisk or dash)
+      if (/^[\*\-]\s/.test(paragraph)) {
+        return (
+          <li key={index} className="ml-5 mb-2 text-sm">
+            {paragraph.replace(/^[\*\-]\s/, '')}
+          </li>
+        );
+      }
+      
       // Regular paragraph
       return <p key={index} className="mb-3 text-sm">{paragraph}</p>;
     });
