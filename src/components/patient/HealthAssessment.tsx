@@ -9,18 +9,30 @@ interface Hospital {
   specialty: string;
 }
 
+export interface HealthQuery {
+  id: string;
+  patient_id: string;
+  query_text: string;
+  ai_assessment: string;
+  patient_data: any;
+  created_at: string;
+  status: string;
+}
+
 interface HealthAssessmentProps {
   assessment?: string | null;
   suggestedSpecialties?: string[] | null;
   recommendedHospitals?: Hospital[] | null;
   minimalView?: boolean;
+  queryData?: HealthQuery;
 }
 
 const HealthAssessment = ({ 
   assessment, 
   suggestedSpecialties,
   recommendedHospitals,
-  minimalView = false
+  minimalView = false,
+  queryData
 }: HealthAssessmentProps) => {
   if (!assessment && !minimalView) return null;
   

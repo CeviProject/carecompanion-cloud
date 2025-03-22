@@ -3,23 +3,13 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from "@/components/ui/button";
-import HealthAssessment from '@/components/patient/HealthAssessment';
+import HealthAssessment, { HealthQuery } from '@/components/patient/HealthAssessment';
 import PatientNavbar from '@/components/patient/PatientNavbar';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Calendar, Clock, FileText, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
-
-interface HealthQuery {
-  id: string;
-  patient_id: string;
-  query_text: string;
-  ai_assessment: string;
-  patient_data: any;
-  created_at: string;
-  status: string;
-}
 
 const Assessment = () => {
   const { user } = useAuth();
