@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -197,15 +198,23 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
 
   const handleGoogleAuthorize = async () => {
     try {
+      console.log('Requesting Google authorization URL');
       const response = await supabase.functions.invoke('google-calendar-event', {
         body: { action: 'authorize' }
       });
       
-      if (response.error) throw new Error(response.error.message);
+      if (response.error) {
+        console.error('Authorization error:', response.error);
+        throw new Error(response.error.message);
+      }
       
-      if (response.data.authUrl) {
+      if (response.data?.authUrl) {
+        console.log('Received auth URL:', response.data.authUrl);
         setGoogleAuthUrl(response.data.authUrl);
         setIsGoogleAuthDialogOpen(true);
+      } else {
+        console.error('No auth URL in response:', response);
+        throw new Error('Failed to get authorization URL');
       }
     } catch (error) {
       console.error('Error getting Google auth URL:', error);
@@ -215,6 +224,7 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
 
   const handleGoogleAuthCallback = async (code: string) => {
     try {
+      console.log('Exchanging authorization code for tokens');
       const response = await supabase.functions.invoke('google-calendar-event', {
         body: { 
           code,
@@ -222,12 +232,19 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
         }
       });
       
-      if (response.error) throw new Error(response.error.message);
+      if (response.error) {
+        console.error('Token exchange error:', response.error);
+        throw new Error(response.error.message);
+      }
       
       if (response.data) {
+        console.log('Received tokens successfully');
         saveGoogleCalendarTokens(response.data);
         toast.success('Google Calendar connected successfully');
         setIsGoogleAuthDialogOpen(false);
+      } else {
+        console.error('No token data in response:', response);
+        throw new Error('Failed to exchange code for tokens');
       }
     } catch (error) {
       console.error('Error exchanging Google auth code:', error);
@@ -369,6 +386,7 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
             `Dr. ${doctor.profiles.first_name} ${doctor.profiles.last_name}` : 
             'Doctor';
           
+          console.log('Adding appointment to Google Calendar');
           await addToGoogleCalendar({
             summary: `Medical Appointment with ${doctorName}`,
             description: values.reason,
@@ -381,6 +399,7 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
           console.error('Failed to add to Google Calendar:', calendarError);
           
           if (calendarError.message?.includes('401') && tokens.refresh_token) {
+            console.log('Token expired, attempting to refresh');
             const newToken = await refreshGoogleToken(tokens.refresh_token);
             if (newToken) {
               try {
@@ -497,6 +516,7 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
     accessToken: string;
   }) => {
     try {
+      console.log('Invoking Google Calendar edge function to create event');
       const response = await supabase.functions.invoke('google-calendar-event', {
         body: { 
           event: {
@@ -510,8 +530,12 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
         }
       });
       
-      if (response.error) throw new Error(response.error.message);
+      if (response.error) {
+        console.error('Error adding to calendar:', response.error);
+        throw new Error(response.error.message);
+      }
       
+      console.log('Event created successfully:', response.data);
       return response.data;
     } catch (error) {
       console.error('Error adding to Google Calendar:', error);
@@ -525,6 +549,7 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
     const state = url.searchParams.get('state');
     
     if (code && state === 'google_calendar_auth') {
+      console.log('OAuth callback detected, processing code');
       window.history.replaceState({}, document.title, window.location.pathname);
       handleGoogleAuthCallback(code);
     }

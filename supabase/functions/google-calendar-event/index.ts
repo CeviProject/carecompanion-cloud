@@ -27,7 +27,7 @@ serve(async (req) => {
 
     // Parse the request body to get the action
     const { action, ...data } = await req.json();
-    console.log(`Processing action: ${action}`);
+    console.log(`Processing action: ${action}`, JSON.stringify(data, null, 2));
 
     // Generate OAuth URL for user authorization
     if (action === 'authorize') {
@@ -43,6 +43,7 @@ serve(async (req) => {
       authUrl.searchParams.append('scope', scopes.join(' '));
       authUrl.searchParams.append('access_type', 'offline');
       authUrl.searchParams.append('prompt', 'consent');
+      authUrl.searchParams.append('state', 'google_calendar_auth');
       
       return new Response(JSON.stringify({ 
         authUrl: authUrl.toString() 
@@ -59,6 +60,7 @@ serve(async (req) => {
         throw new Error('Authorization code is required');
       }
       
+      console.log(`Exchanging authorization code for tokens with redirect URI: ${REDIRECT_URI}`);
       const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
         method: 'POST',
         headers: {
@@ -80,6 +82,7 @@ serve(async (req) => {
       }
       
       const tokenData = await tokenResponse.json();
+      console.log('Token exchange successful');
       
       return new Response(JSON.stringify({
         access_token: tokenData.access_token,
@@ -98,6 +101,7 @@ serve(async (req) => {
         throw new Error('Refresh token is required');
       }
       
+      console.log('Refreshing access token');
       const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
         method: 'POST',
         headers: {
@@ -118,6 +122,7 @@ serve(async (req) => {
       }
       
       const tokenData = await tokenResponse.json();
+      console.log('Token refresh successful');
       
       return new Response(JSON.stringify({
         access_token: tokenData.access_token,
@@ -132,6 +137,7 @@ serve(async (req) => {
       const { event, accessToken } = data;
       
       if (!event || !event.summary || !event.startTime || !event.endTime) {
+        console.error('Invalid event data:', event);
         throw new Error('Invalid event data. Required fields: summary, startTime, endTime');
       }
 
@@ -139,7 +145,7 @@ serve(async (req) => {
         throw new Error('No access token provided. User must authorize Google Calendar access');
       }
       
-      console.log('Creating calendar event:', event);
+      console.log('Creating calendar event:', JSON.stringify(event, null, 2));
       
       // Handle recurring events
       let recurrence = null;
@@ -170,6 +176,7 @@ serve(async (req) => {
       };
       
       // Create the event in Google Calendar
+      console.log('Sending request to Google Calendar API');
       const response = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
         method: 'POST',
         headers: {
@@ -185,22 +192,24 @@ serve(async (req) => {
         throw new Error(`Google Calendar API error: ${error}`);
       }
       
-      const data = await response.json();
+      const responseData = await response.json();
+      console.log('Event created successfully:', responseData.id);
       
       return new Response(JSON.stringify({ 
         success: true,
-        eventId: data.id,
-        htmlLink: data.htmlLink
+        eventId: responseData.id,
+        htmlLink: responseData.htmlLink
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
     
     // If no valid action is matched
+    console.error('Invalid action specified:', action);
     throw new Error('Invalid action specified. Valid actions are: authorize, token, refresh, create');
     
   } catch (error) {
-    console.error('Error in google-calendar-event function:', error);
+    console.error('Error in google-calendar-event function:', error.message);
     return new Response(JSON.stringify({ 
       success: false,
       error: error.message,
