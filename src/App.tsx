@@ -16,7 +16,14 @@ import { Skeleton } from "./components/ui/skeleton";
 import About from "./pages/About";
 import Features from "./pages/Features";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 // Protected route component
 const ProtectedRoute = ({ 

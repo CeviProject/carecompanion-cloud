@@ -26,104 +26,123 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const navigate = useNavigate();
 
+  // Function to clear auth state completely
+  const clearAuthState = () => {
+    console.log('Clearing auth state');
+    setSession(null);
+    setUser(null);
+    setProfile(null);
+    setIsAuthenticated(false);
+  };
+
+  // Function to fetch profile for a user
+  const fetchProfile = async (userId: string) => {
+    console.log('Fetching profile for user:', userId);
+    
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+      
+      if (error) {
+        console.error('Error fetching profile:', error);
+        return null;
+      }
+      
+      console.log('Profile fetched:', data);
+      return data;
+    } catch (error) {
+      console.error('Exception fetching profile:', error);
+      return null;
+    }
+  };
+
+  // Set up auth state management
   useEffect(() => {
     console.log('AuthProvider mounted, setting up auth state listener');
+    let subscription: { unsubscribe: () => void } | null = null;
     
-    // Set up auth state listener FIRST
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('Auth state changed:', event, session?.user?.id);
+    // Function to properly set up auth state listener
+    const setupAuthListener = async () => {
+      try {
+        // First clear any existing auth state to prevent stale data
+        clearAuthState();
         
-        if (event === 'SIGNED_OUT') {
-          console.log('SIGNED_OUT event detected, clearing state');
-          setSession(null);
-          setUser(null);
-          setProfile(null);
-          setIsAuthenticated(false);
-          // Force navigate to home on sign out
-          navigate('/', { replace: true });
-          return;
-        }
-        
-        setSession(session);
-        setUser(session?.user ?? null);
-        setIsAuthenticated(!!session?.user); // Update authentication flag
-        
-        if (session?.user) {
-          console.log('Fetching profile for user:', session.user.id);
-          const { data, error } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', session.user.id)
-            .maybeSingle();
+        // Set up auth state listener
+        const { data } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+          console.log('Auth state changed:', event, newSession?.user?.id);
           
-          if (error) {
-            console.error('Error fetching profile:', error);
-          } else {
-            console.log('Profile fetched:', data);
-            setProfile(data);
+          if (event === 'SIGNED_OUT' || !newSession) {
+            console.log('SIGNED_OUT event detected or no session, clearing state');
+            clearAuthState();
+            // Force navigate to home on sign out
+            navigate('/', { replace: true });
+            return;
+          }
+          
+          // For all other auth events, update the session and user
+          setSession(newSession);
+          setUser(newSession.user);
+          setIsAuthenticated(!!newSession.user);
+          
+          if (newSession.user) {
+            const profileData = await fetchProfile(newSession.user.id);
+            setProfile(profileData);
             
             // Navigate to appropriate dashboard if user is on auth pages
             const currentPath = window.location.pathname;
             if (currentPath === '/' || currentPath.startsWith('/auth/')) {
-              console.log('Redirecting to dashboard for role:', data?.role || 'patient');
-              navigate(`/dashboard/${data?.role || 'patient'}`);
+              console.log('Redirecting to dashboard for role:', profileData?.role || 'patient');
+              navigate(`/dashboard/${profileData?.role || 'patient'}`);
             }
           }
-        } else {
-          console.log('No user session, clearing profile');
-          setProfile(null);
+        });
+        
+        subscription = data.subscription;
+        
+        // Check for existing session
+        console.log('Checking for existing session');
+        const { data: { session: existingSession } } = await supabase.auth.getSession();
+        
+        console.log('Existing session check result:', !!existingSession);
+        
+        if (existingSession) {
+          setSession(existingSession);
+          setUser(existingSession.user);
+          setIsAuthenticated(!!existingSession.user);
+          
+          if (existingSession.user) {
+            const profileData = await fetchProfile(existingSession.user.id);
+            setProfile(profileData);
+          }
         }
-
+        
+        setLoading(false);
+      } catch (error) {
+        console.error('Error setting up auth:', error);
         setLoading(false);
       }
-    );
-
-    // THEN check for existing session
-    console.log('Checking for existing session');
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log('Existing session check result:', !!session);
-      setSession(session);
-      setUser(session?.user ?? null);
-      setIsAuthenticated(!!session?.user); // Update authentication flag
-      
-      if (session?.user) {
-        console.log('Fetching profile for existing user:', session.user.id);
-        supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .maybeSingle()
-          .then(({ data, error }) => {
-            if (error) {
-              console.error('Error fetching profile for existing user:', error);
-            } else {
-              console.log('Profile fetched for existing user:', data);
-              setProfile(data);
-              
-              // Check if user is on auth pages and redirect if needed
-              const currentPath = window.location.pathname;
-              if (currentPath === '/' || currentPath.startsWith('/auth/')) {
-                console.log('Redirecting existing user to dashboard for role:', data?.role || 'patient');
-                navigate(`/dashboard/${data?.role || 'patient'}`);
-              }
-            }
-            setLoading(false);
-          });
-      } else {
-        setLoading(false);
-      }
-    });
-
+    };
+    
+    // Initialize auth
+    setupAuthListener();
+    
+    // Cleanup function
     return () => {
       console.log('AuthProvider unmounting, unsubscribing from auth state changes');
-      subscription.unsubscribe();
+      if (subscription) {
+        subscription.unsubscribe();
+      }
     };
   }, [navigate]);
 
   const signIn = async (email: string, password: string) => {
     try {
       console.log('Attempting sign in for email:', email);
+      setLoading(true);
+      
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -134,18 +153,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         throw error;
       }
 
+      // Auth state change listener will handle the session update
       toast.success('Login successful!');
-      // Let the onAuthStateChange handler navigate based on user role
     } catch (error: any) {
       console.error('Sign in catch block error:', error.message);
       toast.error(error.message || 'Failed to sign in');
       throw error;
+    } finally {
+      setLoading(false);
     }
   };
 
   const signUp = async (email: string, password: string, userData: any) => {
     try {
       console.log('Attempting sign up for email:', email);
+      setLoading(true);
+      
       const { error } = await supabase.auth.signUp({
         email,
         password,
@@ -164,20 +187,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       console.error('Sign up catch block error:', error.message);
       toast.error(error.message || 'Failed to sign up');
       throw error;
+    } finally {
+      setLoading(false);
     }
   };
 
   const signOut = async () => {
     try {
       console.log('Signing out...');
+      setLoading(true);
       
-      // First clear local state (do this BEFORE the API call to ensure UI updates immediately)
-      setSession(null);
-      setUser(null);
-      setProfile(null);
-      setIsAuthenticated(false);
+      // First clear local state to ensure immediate UI update
+      clearAuthState();
       
-      // Now call the API to sign out
+      // Then sign out from Supabase
       const { error } = await supabase.auth.signOut();
       
       if (error) {
@@ -187,6 +210,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       
       console.log('Successfully signed out from Supabase');
       
+      // Force a browser storage clear for auth
+      localStorage.removeItem('supabase.auth.token');
+      localStorage.removeItem('supabase.auth.expires_at');
+      
       // Force navigate to home page
       navigate('/', { replace: true });
       toast.success('Logged out successfully');
@@ -195,6 +222,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       toast.error(error.message || 'Failed to sign out');
       // Still navigate to home even if there was an error
       navigate('/', { replace: true });
+    } finally {
+      setLoading(false);
     }
   };
 
