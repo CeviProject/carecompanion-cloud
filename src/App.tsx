@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import Index from "./pages/Index";
 import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
@@ -15,6 +15,7 @@ import { GoogleCalendarProvider } from "./context/GoogleCalendarContext";
 import { Skeleton } from "./components/ui/skeleton";
 import About from "./pages/About";
 import Features from "./pages/Features";
+import { useEffect } from "react";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -25,7 +26,7 @@ const queryClient = new QueryClient({
   },
 });
 
-// Protected route component
+// Protected route component with location-aware redirection
 const ProtectedRoute = ({ 
   children, 
   requiredRole 
@@ -34,6 +35,16 @@ const ProtectedRoute = ({
   requiredRole?: 'patient' | 'doctor' 
 }) => {
   const { user, profile, loading, isAuthenticated } = useAuth();
+  const location = useLocation();
+
+  useEffect(() => {
+    console.log("ProtectedRoute mount - Auth state:", { 
+      isAuthenticated, 
+      role: profile?.role, 
+      loading, 
+      path: location.pathname 
+    });
+  }, [isAuthenticated, profile, loading, location.pathname]);
 
   if (loading) {
     return (
@@ -48,8 +59,8 @@ const ProtectedRoute = ({
   }
 
   if (!isAuthenticated) {
-    console.log('User not authenticated, redirecting to login');
-    return <Navigate to="/auth/login" replace />;
+    console.log('User not authenticated, redirecting to login from', location.pathname);
+    return <Navigate to="/auth/login" state={{ from: location.pathname }} replace />;
   }
 
   if (requiredRole && profile?.role !== requiredRole) {
@@ -61,8 +72,24 @@ const ProtectedRoute = ({
 };
 
 // Public only route (not accessible when logged in)
-const PublicOnlyRoute = ({ children, redirectTo }: { children: React.ReactNode, redirectTo?: string }) => {
+const PublicOnlyRoute = ({ 
+  children, 
+  redirectTo 
+}: { 
+  children: React.ReactNode, 
+  redirectTo?: string 
+}) => {
   const { loading, isAuthenticated, profile } = useAuth();
+  const location = useLocation();
+  
+  useEffect(() => {
+    console.log("PublicOnlyRoute mount - Auth state:", { 
+      isAuthenticated, 
+      role: profile?.role, 
+      loading, 
+      path: location.pathname 
+    });
+  }, [isAuthenticated, profile, loading, location.pathname]);
 
   if (loading) {
     return (
@@ -77,7 +104,7 @@ const PublicOnlyRoute = ({ children, redirectTo }: { children: React.ReactNode, 
   }
 
   if (isAuthenticated) {
-    console.log('User already authenticated, redirecting from public only route');
+    console.log('User already authenticated, redirecting from public only route', location.pathname);
     const defaultRedirect = `/dashboard/${profile?.role || 'patient'}`;
     const targetPath = redirectTo || defaultRedirect;
     console.log(`Redirecting to: ${targetPath}`);

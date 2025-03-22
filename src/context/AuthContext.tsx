@@ -1,5 +1,5 @@
 
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -25,18 +25,27 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const navigate = useNavigate();
+  
+  // Use a ref to track if the component is mounted
+  const isMounted = useRef(true);
+  // Track if we're currently signing out to prevent race conditions
+  const isSigningOut = useRef(false);
+  // Track the auth subscription
+  const authSubscription = useRef<{ unsubscribe: () => void } | null>(null);
 
   // Function to clear auth state completely
-  const clearAuthState = () => {
+  const clearAuthState = useCallback(() => {
     console.log('Clearing auth state');
-    setSession(null);
-    setUser(null);
-    setProfile(null);
-    setIsAuthenticated(false);
-  };
+    if (isMounted.current) {
+      setSession(null);
+      setUser(null);
+      setProfile(null);
+      setIsAuthenticated(false);
+    }
+  }, []);
 
   // Function to fetch profile for a user
-  const fetchProfile = async (userId: string) => {
+  const fetchProfile = useCallback(async (userId: string) => {
     console.log('Fetching profile for user:', userId);
     
     try {
@@ -57,86 +66,101 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       console.error('Exception fetching profile:', error);
       return null;
     }
-  };
+  }, []);
+
+  // Function to handle auth state changes
+  const handleAuthChange = useCallback(async (event: string, newSession: Session | null) => {
+    console.log(`Auth state changed: ${event}`, newSession?.user?.id);
+    
+    if (event === 'SIGNED_OUT' || !newSession) {
+      console.log('SIGNED_OUT event detected or no session, clearing state');
+      clearAuthState();
+      return;
+    }
+    
+    if (isSigningOut.current) {
+      console.log('Currently signing out, ignoring auth change');
+      return;
+    }
+    
+    if (isMounted.current) {
+      setSession(newSession);
+      setUser(newSession.user);
+      setIsAuthenticated(!!newSession.user);
+      
+      if (newSession.user) {
+        const profileData = await fetchProfile(newSession.user.id);
+        if (isMounted.current) {
+          setProfile(profileData);
+        }
+      }
+    }
+  }, [clearAuthState, fetchProfile]);
 
   // Set up auth state management
   useEffect(() => {
     console.log('AuthProvider mounted, setting up auth state listener');
-    let subscription: { unsubscribe: () => void } | null = null;
+    setLoading(true);
     
-    // Function to properly set up auth state listener
-    const setupAuthListener = async () => {
+    // Clean up any existing subscription first
+    if (authSubscription.current) {
+      console.log('Cleaning up existing auth subscription');
+      authSubscription.current.unsubscribe();
+      authSubscription.current = null;
+    }
+    
+    // Set up new auth state listener
+    const setupAuth = async () => {
       try {
-        // First clear any existing auth state to prevent stale data
-        clearAuthState();
-        
-        // Set up auth state listener
-        const { data } = supabase.auth.onAuthStateChange(async (event, newSession) => {
-          console.log('Auth state changed:', event, newSession?.user?.id);
-          
-          if (event === 'SIGNED_OUT' || !newSession) {
-            console.log('SIGNED_OUT event detected or no session, clearing state');
-            clearAuthState();
-            // Force navigate to home on sign out
-            navigate('/', { replace: true });
-            return;
-          }
-          
-          // For all other auth events, update the session and user
-          setSession(newSession);
-          setUser(newSession.user);
-          setIsAuthenticated(!!newSession.user);
-          
-          if (newSession.user) {
-            const profileData = await fetchProfile(newSession.user.id);
-            setProfile(profileData);
-            
-            // Navigate to appropriate dashboard if user is on auth pages
-            const currentPath = window.location.pathname;
-            if (currentPath === '/' || currentPath.startsWith('/auth/')) {
-              console.log('Redirecting to dashboard for role:', profileData?.role || 'patient');
-              navigate(`/dashboard/${profileData?.role || 'patient'}`);
-            }
-          }
-        });
-        
-        subscription = data.subscription;
+        // Set up the auth state listener
+        const { data } = supabase.auth.onAuthStateChange(handleAuthChange);
+        authSubscription.current = data.subscription;
         
         // Check for existing session
         console.log('Checking for existing session');
-        const { data: { session: existingSession } } = await supabase.auth.getSession();
+        const { data: { session: existingSession }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('Error getting session:', error);
+          if (isMounted.current) setLoading(false);
+          return;
+        }
         
         console.log('Existing session check result:', !!existingSession);
         
-        if (existingSession) {
+        if (existingSession && isMounted.current) {
           setSession(existingSession);
           setUser(existingSession.user);
           setIsAuthenticated(!!existingSession.user);
           
           if (existingSession.user) {
             const profileData = await fetchProfile(existingSession.user.id);
-            setProfile(profileData);
+            if (isMounted.current) {
+              setProfile(profileData);
+            }
           }
         }
         
-        setLoading(false);
+        if (isMounted.current) setLoading(false);
       } catch (error) {
         console.error('Error setting up auth:', error);
-        setLoading(false);
+        if (isMounted.current) setLoading(false);
       }
     };
     
-    // Initialize auth
-    setupAuthListener();
+    setupAuth();
     
     // Cleanup function
     return () => {
       console.log('AuthProvider unmounting, unsubscribing from auth state changes');
-      if (subscription) {
-        subscription.unsubscribe();
+      isMounted.current = false;
+      
+      if (authSubscription.current) {
+        authSubscription.current.unsubscribe();
+        authSubscription.current = null;
       }
     };
-  }, [navigate]);
+  }, [handleAuthChange, fetchProfile]);
 
   const signIn = async (email: string, password: string) => {
     try {
@@ -160,7 +184,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       toast.error(error.message || 'Failed to sign in');
       throw error;
     } finally {
-      setLoading(false);
+      if (isMounted.current) setLoading(false);
     }
   };
 
@@ -188,17 +212,26 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       toast.error(error.message || 'Failed to sign up');
       throw error;
     } finally {
-      setLoading(false);
+      if (isMounted.current) setLoading(false);
     }
   };
 
   const signOut = async () => {
     try {
       console.log('Signing out...');
-      setLoading(true);
+      if (isSigningOut.current) {
+        console.log('Already signing out, ignoring duplicate request');
+        return;
+      }
+      
+      isSigningOut.current = true;
+      if (isMounted.current) setLoading(true);
       
       // First clear local state to ensure immediate UI update
       clearAuthState();
+      
+      // Force remove tokens from storage before calling signOut
+      localStorage.removeItem('sb-irkihiedlszoufsjglhw-auth-token');
       
       // Then sign out from Supabase
       const { error } = await supabase.auth.signOut();
@@ -210,9 +243,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       
       console.log('Successfully signed out from Supabase');
       
-      // Force a browser storage clear for auth
-      localStorage.removeItem('supabase.auth.token');
-      localStorage.removeItem('supabase.auth.expires_at');
+      // Force a browser storage clear for all auth-related items
+      Object.keys(localStorage).forEach(key => {
+        if (key.includes('supabase.auth') || key.includes('sb-')) {
+          localStorage.removeItem(key);
+        }
+      });
       
       // Force navigate to home page
       navigate('/', { replace: true });
@@ -223,7 +259,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       // Still navigate to home even if there was an error
       navigate('/', { replace: true });
     } finally {
-      setLoading(false);
+      isSigningOut.current = false;
+      if (isMounted.current) setLoading(false);
     }
   };
 
