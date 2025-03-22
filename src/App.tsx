@@ -11,6 +11,7 @@ import PatientDashboard from "./pages/dashboard/PatientDashboard";
 import DoctorDashboard from "./pages/dashboard/DoctorDashboard";
 import NotFound from "./pages/NotFound";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import { Skeleton } from "./components/ui/skeleton";
 
 const queryClient = new QueryClient();
 
@@ -25,7 +26,15 @@ const ProtectedRoute = ({
   const { user, profile, loading, isAuthenticated } = useAuth();
 
   if (loading) {
-    return <div className="flex h-screen items-center justify-center">Loading...</div>;
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="space-y-4 w-full max-w-md px-4">
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-64 w-full" />
+          <Skeleton className="h-12 w-full" />
+        </div>
+      </div>
+    );
   }
 
   if (!isAuthenticated) {
@@ -44,7 +53,15 @@ const PublicOnlyRoute = ({ children }: { children: React.ReactNode }) => {
   const { loading, isAuthenticated, profile } = useAuth();
 
   if (loading) {
-    return <div className="flex h-screen items-center justify-center">Loading...</div>;
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="space-y-4 w-full max-w-md px-4">
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-64 w-full" />
+          <Skeleton className="h-12 w-full" />
+        </div>
+      </div>
+    );
   }
 
   if (isAuthenticated) {
