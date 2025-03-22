@@ -29,6 +29,14 @@ interface Medication {
   created_at: string;
 }
 
+// Define TypeScript interface for Google Calendar tokens
+interface GoogleCalendarTokens {
+  access_token: string;
+  refresh_token: string;
+  expires_in: number;
+  expires_at?: number;
+}
+
 const FREQUENCY_OPTIONS = [
   { value: 'daily', label: 'Daily' },
   { value: 'twice_daily', label: 'Twice Daily' },
@@ -54,10 +62,12 @@ const MedicationReminders = () => {
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [isEndDateCalendarOpen, setIsEndDateCalendarOpen] = useState(false);
   const [todaysMedications, setTodaysMedications] = useState<Medication[]>([]);
+  const [isGoogleCalendarEnabled, setIsGoogleCalendarEnabled] = useState(false);
 
   useEffect(() => {
     if (user) {
       fetchMedications();
+      checkGoogleCalendarIntegration();
       
       // Set up real-time subscription for medications
       const channel = supabase
@@ -131,6 +141,52 @@ const MedicationReminders = () => {
       toast.error(`Failed to load medications: ${error.message}`);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const checkGoogleCalendarIntegration = async () => {
+    try {
+      // First check localStorage
+      const localIntegration = localStorage.getItem('googleCalendarEnabled');
+      
+      if (localIntegration === 'true') {
+        setIsGoogleCalendarEnabled(true);
+      }
+      
+      // If we have a user, check the database for integration
+      if (user) {
+        try {
+          const { data, error } = await supabase.functions.invoke('google-calendar-event', {
+            body: { 
+              action: 'get_tokens',
+              userId: user.id
+            }
+          });
+          
+          if (!error && data.access_token) {
+            setIsGoogleCalendarEnabled(true);
+            
+            // Update localStorage with the latest tokens
+            const tokensWithExpiry = {
+              access_token: data.access_token,
+              refresh_token: data.refresh_token,
+              expires_in: data.expires_in,
+              expires_at: Date.now() + (data.expires_in * 1000)
+            };
+            
+            localStorage.setItem('googleCalendarTokens', JSON.stringify(tokensWithExpiry));
+            localStorage.setItem('googleCalendarEnabled', 'true');
+          }
+        } catch (err) {
+          console.error('Error checking Google Calendar integration:', err);
+          // If there's an error retrieving from DB but we have localStorage tokens, still enable
+          if (localIntegration === 'true') {
+            setIsGoogleCalendarEnabled(true);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error checking Google Calendar integration:', error);
     }
   };
 
@@ -232,7 +288,6 @@ const MedicationReminders = () => {
       if (error) throw error;
 
       // Add to Google Calendar if integration is enabled
-      const isGoogleCalendarEnabled = localStorage.getItem('googleCalendarEnabled') === 'true';
       if (isGoogleCalendarEnabled) {
         try {
           await addToGoogleCalendar(data as Medication);
@@ -271,26 +326,81 @@ const MedicationReminders = () => {
 
   const addToGoogleCalendar = async (medication: Medication) => {
     try {
-      // Check if Google Calendar integration is enabled
-      const isGoogleCalendarEnabled = localStorage.getItem('googleCalendarEnabled') === 'true';
       if (!isGoogleCalendarEnabled) {
         console.log('Google Calendar integration is not enabled, skipping');
         return null;
       }
       
-      // Get stored tokens
+      // Get tokens - try both sources
+      let tokens: GoogleCalendarTokens | null = null;
+      
+      // First try to get tokens from localStorage
       const tokensStr = localStorage.getItem('googleCalendarTokens');
-      if (!tokensStr) {
-        console.log('No Google Calendar tokens found');
-        toast.error('Google Calendar integration is enabled but no access tokens found');
-        return null;
+      if (tokensStr) {
+        try {
+          const storedTokens = JSON.parse(tokensStr);
+          
+          // Check if tokens are expired
+          if (storedTokens.expires_at && Date.now() < storedTokens.expires_at) {
+            tokens = storedTokens;
+            console.log('Using tokens from localStorage');
+          } else if (storedTokens.refresh_token) {
+            // Tokens are expired, try to refresh
+            const { data: refreshData } = await supabase.functions.invoke('google-calendar-event', {
+              body: { 
+                action: 'refresh',
+                refresh_token: storedTokens.refresh_token,
+                userId: user?.id
+              }
+            });
+            
+            if (refreshData.access_token) {
+              tokens = {
+                access_token: refreshData.access_token,
+                refresh_token: storedTokens.refresh_token,
+                expires_in: refreshData.expires_in,
+                expires_at: Date.now() + (refreshData.expires_in * 1000)
+              };
+              
+              // Update localStorage
+              localStorage.setItem('googleCalendarTokens', JSON.stringify(tokens));
+              console.log('Refreshed tokens in localStorage');
+            }
+          }
+        } catch (e) {
+          console.error('Error parsing localStorage tokens:', e);
+        }
       }
       
-      const tokens = JSON.parse(tokensStr);
-      if (!tokens.access_token) {
-        console.log('No access token found in stored tokens');
-        toast.error('Invalid Google Calendar tokens');
-        return null;
+      // If no valid tokens from localStorage and we have a user, try DB
+      if (!tokens && user) {
+        try {
+          const { data } = await supabase.functions.invoke('google-calendar-event', {
+            body: { 
+              action: 'get_tokens',
+              userId: user.id
+            }
+          });
+          
+          if (data.access_token) {
+            tokens = {
+              access_token: data.access_token,
+              refresh_token: data.refresh_token,
+              expires_in: data.expires_in,
+              expires_at: Date.now() + (data.expires_in * 1000)
+            };
+            
+            // Update localStorage with tokens from DB
+            localStorage.setItem('googleCalendarTokens', JSON.stringify(tokens));
+            console.log('Retrieved tokens from database');
+          }
+        } catch (err) {
+          console.error('Error getting tokens from database:', err);
+        }
+      }
+      
+      if (!tokens || !tokens.access_token) {
+        throw new Error('No valid Google Calendar access tokens found');
       }
       
       // Create event details
@@ -333,6 +443,7 @@ const MedicationReminders = () => {
       return data;
     } catch (error: any) {
       console.error('Error adding to Google Calendar:', error);
+      
       // Try refreshing the token if we get an authentication error
       if (error.message && (error.message.includes('401') || error.message.includes('invalid_token'))) {
         try {
@@ -343,6 +454,7 @@ const MedicationReminders = () => {
           console.error('Error refreshing token:', refreshError);
         }
       }
+      
       throw error;
     }
   };
@@ -358,7 +470,8 @@ const MedicationReminders = () => {
       const { data, error } = await supabase.functions.invoke('google-calendar-event', {
         body: { 
           action: 'refresh',
-          refresh_token: tokens.refresh_token 
+          refresh_token: tokens.refresh_token,
+          userId: user?.id
         }
       });
       
@@ -381,6 +494,7 @@ const MedicationReminders = () => {
       console.error('Error refreshing Google token:', error);
       localStorage.removeItem('googleCalendarTokens');
       localStorage.setItem('googleCalendarEnabled', 'false');
+      setIsGoogleCalendarEnabled(false);
       toast.error('Failed to refresh Google Calendar access. Please reconnect.');
       return null;
     }
@@ -411,6 +525,7 @@ const MedicationReminders = () => {
     });
   };
 
+  
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
@@ -588,6 +703,8 @@ const MedicationReminders = () => {
         </Dialog>
       </div>
 
+      
+      
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {[1, 2].map(i => (
@@ -687,4 +804,3 @@ const formatDate = (dateString: string): string => {
 };
 
 export default MedicationReminders;
-

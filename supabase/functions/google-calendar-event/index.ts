@@ -70,7 +70,7 @@ serve(async (req) => {
     
     // Exchange authorization code for tokens
     if (action === 'token') {
-      const { code } = data;
+      const { code, userId } = data;
       
       if (!code) {
         throw new Error('Authorization code is required');
@@ -100,10 +100,50 @@ serve(async (req) => {
       const tokenData = await tokenResponse.json();
       console.log('Token exchange successful');
       
+      // If userId is provided, store the tokens in the database
+      let dbSaveSuccess = false;
+      if (userId) {
+        try {
+          // Create a Supabase client for the edge function
+          const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2");
+          const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+          const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+          
+          if (!supabaseUrl || !supabaseServiceKey) {
+            console.error('Supabase credentials not configured for database storage');
+          } else {
+            const supabase = createClient(supabaseUrl, supabaseServiceKey);
+            
+            // Store tokens in the database
+            const { data: insertData, error: insertError } = await supabase
+              .from('user_integrations')
+              .upsert({
+                user_id: userId,
+                provider: 'google_calendar',
+                access_token: tokenData.access_token,
+                refresh_token: tokenData.refresh_token,
+                expires_at: new Date(Date.now() + (tokenData.expires_in * 1000)).toISOString(),
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              }, { onConflict: 'user_id,provider' });
+            
+            if (insertError) {
+              console.error('Error storing tokens in database:', insertError);
+            } else {
+              dbSaveSuccess = true;
+              console.log('Tokens successfully stored in database for user:', userId);
+            }
+          }
+        } catch (dbError) {
+          console.error('Database token storage error:', dbError);
+        }
+      }
+      
       return new Response(JSON.stringify({
         access_token: tokenData.access_token,
         refresh_token: tokenData.refresh_token,
-        expires_in: tokenData.expires_in
+        expires_in: tokenData.expires_in,
+        stored_in_db: dbSaveSuccess
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -111,7 +151,7 @@ serve(async (req) => {
     
     // Refresh an expired access token
     if (action === 'refresh') {
-      const { refresh_token } = data;
+      const { refresh_token, userId } = data;
       
       if (!refresh_token) {
         throw new Error('Refresh token is required');
@@ -140,12 +180,149 @@ serve(async (req) => {
       const tokenData = await tokenResponse.json();
       console.log('Token refresh successful');
       
+      // If userId is provided, update the tokens in the database
+      let dbUpdateSuccess = false;
+      if (userId) {
+        try {
+          // Create a Supabase client for the edge function
+          const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2");
+          const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+          const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+          
+          if (!supabaseUrl || !supabaseServiceKey) {
+            console.error('Supabase credentials not configured for database storage');
+          } else {
+            const supabase = createClient(supabaseUrl, supabaseServiceKey);
+            
+            // Update tokens in the database
+            const { data: updateData, error: updateError } = await supabase
+              .from('user_integrations')
+              .update({
+                access_token: tokenData.access_token,
+                expires_at: new Date(Date.now() + (tokenData.expires_in * 1000)).toISOString(),
+                updated_at: new Date().toISOString()
+              })
+              .match({ user_id: userId, provider: 'google_calendar' });
+            
+            if (updateError) {
+              console.error('Error updating tokens in database:', updateError);
+            } else {
+              dbUpdateSuccess = true;
+              console.log('Tokens successfully updated in database for user:', userId);
+            }
+          }
+        } catch (dbError) {
+          console.error('Database token update error:', dbError);
+        }
+      }
+      
       return new Response(JSON.stringify({
         access_token: tokenData.access_token,
-        expires_in: tokenData.expires_in
+        expires_in: tokenData.expires_in,
+        updated_in_db: dbUpdateSuccess
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
+    }
+    
+    // Get tokens for a user
+    if (action === 'get_tokens') {
+      const { userId } = data;
+      
+      if (!userId) {
+        throw new Error('User ID is required');
+      }
+      
+      try {
+        // Create a Supabase client for the edge function
+        const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2");
+        const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+        const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+        
+        if (!supabaseUrl || !supabaseServiceKey) {
+          throw new Error('Supabase credentials not configured for database access');
+        }
+        
+        const supabase = createClient(supabaseUrl, supabaseServiceKey);
+        
+        // Get tokens from the database
+        const { data: integrationData, error: integrationError } = await supabase
+          .from('user_integrations')
+          .select('*')
+          .match({ user_id: userId, provider: 'google_calendar' })
+          .single();
+        
+        if (integrationError) {
+          console.error('Error fetching tokens from database:', integrationError);
+          throw new Error('No Google Calendar integration found for this user');
+        }
+        
+        console.log('Tokens fetched from database for user:', userId);
+        
+        // Check if tokens are expired
+        const expiresAt = new Date(integrationData.expires_at).getTime();
+        const now = Date.now();
+        
+        if (now >= expiresAt) {
+          console.log('Access token expired, refreshing...');
+          
+          // Refresh token
+          const refreshResponse = await fetch('https://oauth2.googleapis.com/token', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+              refresh_token: integrationData.refresh_token,
+              client_id: GOOGLE_CLIENT_ID,
+              client_secret: GOOGLE_CLIENT_SECRET,
+              grant_type: 'refresh_token',
+            }),
+          });
+          
+          if (!refreshResponse.ok) {
+            const errorData = await refreshResponse.text();
+            console.error('Token refresh error:', errorData);
+            throw new Error(`Failed to refresh token: ${errorData}`);
+          }
+          
+          const refreshData = await refreshResponse.json();
+          console.log('Token refresh successful');
+          
+          // Update tokens in the database
+          const { error: updateError } = await supabase
+            .from('user_integrations')
+            .update({
+              access_token: refreshData.access_token,
+              expires_at: new Date(Date.now() + (refreshData.expires_in * 1000)).toISOString(),
+              updated_at: new Date().toISOString()
+            })
+            .match({ user_id: userId, provider: 'google_calendar' });
+          
+          if (updateError) {
+            console.error('Error updating tokens in database:', updateError);
+          }
+          
+          return new Response(JSON.stringify({
+            access_token: refreshData.access_token,
+            refresh_token: integrationData.refresh_token,
+            expires_in: refreshData.expires_in
+          }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+        
+        return new Response(JSON.stringify({
+          access_token: integrationData.access_token,
+          refresh_token: integrationData.refresh_token,
+          expires_in: Math.floor((expiresAt - now) / 1000)
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      } catch (error) {
+        console.error('Error getting tokens from database:', error);
+        throw new Error(`Failed to get tokens: ${error.message}`);
+      }
     }
     
     // Create a calendar event
@@ -239,7 +416,7 @@ serve(async (req) => {
     
     // If no valid action is matched
     console.error('Invalid action specified:', action);
-    throw new Error('Invalid action specified. Valid actions are: authorize, token, refresh, create');
+    throw new Error('Invalid action specified. Valid actions are: authorize, token, refresh, get_tokens, create');
     
   } catch (error) {
     console.error('Error in google-calendar-event function:', error.message);
