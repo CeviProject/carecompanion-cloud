@@ -33,6 +33,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Card } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 const formSchema = z.object({
   doctor_id: z.string({
@@ -64,6 +65,8 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
   const [fetchingDoctors, setFetchingDoctors] = useState(true);
   const [availableSlots, setAvailableSlots] = useState<string[]>(timeSlots);
   const [appointments, setAppointments] = useState<any[]>([]);
+  const [isGoogleAuthDialogOpen, setIsGoogleAuthDialogOpen] = useState(false);
+  const [googleAuthUrl, setGoogleAuthUrl] = useState('');
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -78,6 +81,7 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
     
     if (user) {
       fetchUserAppointments();
+      checkGoogleCalendarAuth();
       
       // Set up real-time subscription for appointments
       const channel = supabase
@@ -133,6 +137,128 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
       };
     }
   }, [user]);
+
+  // Check if user has authorized Google Calendar
+  const checkGoogleCalendarAuth = () => {
+    // Check for access token in localStorage
+    const tokens = getGoogleCalendarTokens();
+    
+    // Check if token has expired
+    if (tokens?.access_token && tokens?.expires_at) {
+      const now = Date.now();
+      const expiresAt = tokens.expires_at;
+      
+      if (now >= expiresAt) {
+        // Token expired, refresh it if we have a refresh token
+        if (tokens.refresh_token) {
+          refreshGoogleToken(tokens.refresh_token);
+        } else {
+          // No refresh token, need to reauthorize
+          localStorage.removeItem('googleCalendarTokens');
+          localStorage.setItem('googleCalendarEnabled', 'false');
+        }
+      }
+    }
+  };
+
+  // Get Google Calendar tokens from localStorage
+  const getGoogleCalendarTokens = () => {
+    const tokensStr = localStorage.getItem('googleCalendarTokens');
+    if (!tokensStr) return null;
+    
+    try {
+      return JSON.parse(tokensStr);
+    } catch (err) {
+      console.error('Error parsing Google Calendar tokens:', err);
+      return null;
+    }
+  };
+  
+  // Save Google Calendar tokens to localStorage
+  const saveGoogleCalendarTokens = (tokens: any) => {
+    // Calculate expires_at timestamp
+    const expiresAt = Date.now() + (tokens.expires_in * 1000);
+    const tokensToSave = {
+      ...tokens,
+      expires_at: expiresAt
+    };
+    
+    localStorage.setItem('googleCalendarTokens', JSON.stringify(tokensToSave));
+    localStorage.setItem('googleCalendarEnabled', 'true');
+  };
+
+  // Refresh Google access token
+  const refreshGoogleToken = async (refreshToken: string) => {
+    try {
+      const response = await supabase.functions.invoke('google-calendar-event', {
+        body: { 
+          refresh_token: refreshToken 
+        },
+        path: '/refresh'
+      });
+      
+      if (response.error) throw new Error(response.error.message);
+      
+      if (response.data.access_token) {
+        // Update tokens in localStorage
+        const currentTokens = getGoogleCalendarTokens();
+        saveGoogleCalendarTokens({
+          ...currentTokens,
+          access_token: response.data.access_token,
+          expires_in: response.data.expires_in
+        });
+        
+        return response.data.access_token;
+      }
+    } catch (error) {
+      console.error('Error refreshing Google token:', error);
+      // Clear tokens if refresh failed
+      localStorage.removeItem('googleCalendarTokens');
+      localStorage.setItem('googleCalendarEnabled', 'false');
+      return null;
+    }
+  };
+
+  // Handle Google authorization
+  const handleGoogleAuthorize = async () => {
+    try {
+      const response = await supabase.functions.invoke('google-calendar-event', {
+        body: {},
+        path: '/authorize'
+      });
+      
+      if (response.error) throw new Error(response.error.message);
+      
+      if (response.data.authUrl) {
+        setGoogleAuthUrl(response.data.authUrl);
+        setIsGoogleAuthDialogOpen(true);
+      }
+    } catch (error) {
+      console.error('Error getting Google auth URL:', error);
+      toast.error('Failed to start Google Calendar authorization');
+    }
+  };
+
+  // Handle Google auth callback
+  const handleGoogleAuthCallback = async (code: string) => {
+    try {
+      const response = await supabase.functions.invoke('google-calendar-event', {
+        body: { code },
+        path: '/token'
+      });
+      
+      if (response.error) throw new Error(response.error.message);
+      
+      if (response.data) {
+        saveGoogleCalendarTokens(response.data);
+        toast.success('Google Calendar connected successfully');
+        setIsGoogleAuthDialogOpen(false);
+      }
+    } catch (error) {
+      console.error('Error exchanging Google auth code:', error);
+      toast.error('Failed to connect Google Calendar');
+    }
+  };
 
   const fetchUserAppointments = async () => {
     if (!user) return;
@@ -269,19 +395,48 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
       form.reset();
       
       // Add to Google Calendar if integration is enabled
-      const calendarEnabled = localStorage.getItem('googleCalendarEnabled') === 'true';
-      if (calendarEnabled) {
+      const tokens = getGoogleCalendarTokens();
+      if (tokens?.access_token) {
         try {
+          // Get doctor's name
+          const doctor = doctors.find(d => d.id === values.doctor_id);
+          const doctorName = doctor ? 
+            `Dr. ${doctor.profiles.first_name} ${doctor.profiles.last_name}` : 
+            'Doctor';
+          
           await addToGoogleCalendar({
-            summary: `Medical Appointment`,
+            summary: `Medical Appointment with ${doctorName}`,
             description: values.reason,
             startTime: appointmentDate.toISOString(),
-            endTime: new Date(appointmentDate.getTime() + 30 * 60000).toISOString() // 30 min appointment
+            endTime: new Date(appointmentDate.getTime() + 30 * 60000).toISOString(), // 30 min appointment
+            accessToken: tokens.access_token
           });
           toast.success('Added to Google Calendar');
-        } catch (calendarError) {
+        } catch (calendarError: any) {
           console.error('Failed to add to Google Calendar:', calendarError);
-          toast.error('Failed to add to Google Calendar');
+          
+          // If error is due to invalid token, try to refresh
+          if (calendarError.message?.includes('401') && tokens.refresh_token) {
+            const newToken = await refreshGoogleToken(tokens.refresh_token);
+            if (newToken) {
+              // Retry with new token
+              try {
+                await addToGoogleCalendar({
+                  summary: `Medical Appointment`,
+                  description: values.reason,
+                  startTime: appointmentDate.toISOString(),
+                  endTime: new Date(appointmentDate.getTime() + 30 * 60000).toISOString(),
+                  accessToken: newToken
+                });
+                toast.success('Added to Google Calendar');
+              } catch (retryError) {
+                console.error('Failed to add to Google Calendar after token refresh:', retryError);
+                toast.error('Failed to add to Google Calendar');
+              }
+            }
+          } else {
+            toast.error('Failed to add to Google Calendar');
+          }
         }
       }
       
@@ -381,10 +536,20 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
     description: string;
     startTime: string;
     endTime: string;
+    accessToken: string;
   }) => {
     try {
       const response = await supabase.functions.invoke('google-calendar-event', {
-        body: { event }
+        body: { 
+          event: {
+            summary: event.summary,
+            description: event.description,
+            startTime: event.startTime,
+            endTime: event.endTime
+          }, 
+          accessToken: event.accessToken 
+        },
+        path: '/create'
       });
       
       if (response.error) throw new Error(response.error.message);
@@ -395,6 +560,22 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
       throw error;
     }
   };
+
+  // Process URL params for Google OAuth callback
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const code = url.searchParams.get('code');
+    const state = url.searchParams.get('state');
+    
+    // If we have a code and it's a Google Calendar auth callback
+    if (code && state === 'google_calendar_auth') {
+      // Remove the query params
+      window.history.replaceState({}, document.title, window.location.pathname);
+      
+      // Exchange the code for tokens
+      handleGoogleAuthCallback(code);
+    }
+  }, []);
 
   return (
     <Card className="glass-card p-6">
@@ -552,17 +733,51 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
               <Button type="submit" className="flex-1" disabled={loading}>
                 {loading ? 'Booking...' : 'Book Appointment'}
               </Button>
-              <GoogleCalendarToggle />
+              <GoogleCalendarToggle onAuthorize={handleGoogleAuthorize} />
             </div>
           </form>
         </Form>
       )}
+      
+      <Dialog open={isGoogleAuthDialogOpen} onOpenChange={setIsGoogleAuthDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Connect to Google Calendar</DialogTitle>
+            <DialogDescription>
+              You'll be redirected to Google to authorize access to your calendar.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="mb-4">
+              This will allow the app to:
+            </p>
+            <ul className="list-disc pl-5 space-y-1 mb-4">
+              <li>View your calendars</li>
+              <li>Create events in your primary calendar</li>
+              <li>Send reminders for your appointments</li>
+            </ul>
+            <p className="text-sm text-muted-foreground">
+              You will be redirected to Google's authorization page.
+            </p>
+          </div>
+          <div className="flex justify-end space-x-2">
+            <Button variant="outline" onClick={() => setIsGoogleAuthDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={() => {
+              window.location.href = googleAuthUrl;
+            }}>
+              Continue to Google
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 };
 
 // Google Calendar integration toggle
-const GoogleCalendarToggle = () => {
+const GoogleCalendarToggle = ({ onAuthorize }: { onAuthorize: () => void }) => {
   const [enabled, setEnabled] = useState(() => 
     localStorage.getItem('googleCalendarEnabled') === 'true'
   );
@@ -574,17 +789,12 @@ const GoogleCalendarToggle = () => {
     
     if (newState) {
       // Redirect to Google auth
-      redirectToGoogleAuth();
+      onAuthorize();
     } else {
+      // Remove tokens
+      localStorage.removeItem('googleCalendarTokens');
       toast.info('Google Calendar integration disabled');
     }
-  };
-  
-  const redirectToGoogleAuth = () => {
-    // This function would redirect to the Google OAuth flow
-    // For now, just show a toast message
-    toast.info('Google Calendar authorization required');
-    // Full implementation would require Google OAuth setup
   };
   
   return (
