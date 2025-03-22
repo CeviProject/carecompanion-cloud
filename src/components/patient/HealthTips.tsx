@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,12 +6,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Heart, Plus, Share, Star } from 'lucide-react';
+import { Heart, Plus, Share, Star, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
-// Define TypeScript interface for health tips
 interface HealthTip {
   id: string;
   user_id: string;
@@ -28,24 +26,81 @@ const HealthTips = () => {
   const { user } = useAuth();
   const [healthTips, setHealthTips] = useState<HealthTip[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isGenerating, setIsGenerating] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [newTip, setNewTip] = useState({
     title: '',
     content: '',
     is_public: false
   });
+  const [publicTipsCount, setPublicTipsCount] = useState(0);
 
-  // Fetch health tips when component mounts
   useEffect(() => {
     if (user) {
       fetchHealthTips();
+      
+      const channel = supabase
+        .channel('health-tips-changes')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'health_tips'
+          },
+          (payload) => {
+            if (payload.eventType === 'INSERT') {
+              if (payload.new.is_public || payload.new.user_id === user.id) {
+                setHealthTips(prev => {
+                  if (!prev.some(tip => tip.id === payload.new.id)) {
+                    return [payload.new as HealthTip, ...prev];
+                  }
+                  return prev;
+                });
+                
+                if (payload.new.is_public && payload.new.user_id !== user.id) {
+                  toast.info('New public health tip available!', {
+                    action: {
+                      label: 'View',
+                      onClick: () => {
+                        const tipElement = document.getElementById(`tip-${payload.new.id}`);
+                        if (tipElement) {
+                          tipElement.scrollIntoView({ behavior: 'smooth' });
+                          tipElement.classList.add('highlight-animation');
+                          setTimeout(() => {
+                            tipElement.classList.remove('highlight-animation');
+                          }, 2000);
+                        }
+                      },
+                    },
+                  });
+                }
+              }
+            } else if (payload.eventType === 'UPDATE') {
+              setHealthTips(prev => 
+                prev.map(tip => tip.id === payload.new.id ? payload.new as HealthTip : tip)
+              );
+            } else if (payload.eventType === 'DELETE') {
+              setHealthTips(prev => prev.filter(tip => tip.id !== payload.old.id));
+            }
+          }
+        )
+        .subscribe();
+        
+      return () => {
+        supabase.removeChannel(channel);
+      };
     }
   }, [user]);
+
+  useEffect(() => {
+    const publicTips = healthTips.filter(tip => tip.is_public);
+    setPublicTipsCount(publicTips.length);
+  }, [healthTips]);
 
   const fetchHealthTips = async () => {
     try {
       setIsLoading(true);
-      // Fetch user's own tips
       const { data: userTips, error: userTipsError } = await supabase
         .from('health_tips')
         .select('*')
@@ -53,7 +108,6 @@ const HealthTips = () => {
 
       if (userTipsError) throw userTipsError;
 
-      // Fetch public tips from other users
       const { data: publicTips, error: publicTipsError } = await supabase
         .from('health_tips')
         .select('*')
@@ -62,7 +116,6 @@ const HealthTips = () => {
 
       if (publicTipsError) throw publicTipsError;
 
-      // Combine and deduplicate tips
       const combinedTips = [...(userTips || []), ...(publicTips || [])];
       const uniqueTips = Array.from(new Map(combinedTips.map(tip => [tip.id, tip])).values());
       
@@ -97,10 +150,13 @@ const HealthTips = () => {
 
       if (error) throw error;
 
-      setHealthTips(prev => [...prev, data as HealthTip]);
       setNewTip({ title: '', content: '', is_public: false });
       setIsAddDialogOpen(false);
       toast.success('Health tip added successfully!');
+      
+      if (newTip.is_public) {
+        sendTipNotification(data as HealthTip, 'added');
+      }
     } catch (error: any) {
       console.error('Error adding health tip:', error.message);
       toast.error(`Failed to add health tip: ${error.message}`);
@@ -109,7 +165,6 @@ const HealthTips = () => {
 
   const toggleFavorite = async (tipId: string, isFavorite: boolean) => {
     try {
-      // Only allow favoriting your own tips
       const tipToUpdate = healthTips.find(tip => tip.id === tipId);
       if (tipToUpdate?.user_id !== user?.id) {
         toast.error('You can only favorite your own health tips');
@@ -122,12 +177,6 @@ const HealthTips = () => {
         .eq('id', tipId);
 
       if (error) throw error;
-
-      setHealthTips(prev => 
-        prev.map(tip => 
-          tip.id === tipId ? { ...tip, is_favorite: !isFavorite } : tip
-        )
-      );
       
       toast.success(isFavorite ? 'Removed from favorites' : 'Added to favorites');
     } catch (error: any) {
@@ -138,6 +187,7 @@ const HealthTips = () => {
 
   const generateAITip = async () => {
     try {
+      setIsGenerating(true);
       const { data, error } = await supabase.functions.invoke('generate-health-tip', {
         body: { user_id: user?.id }
       });
@@ -145,7 +195,6 @@ const HealthTips = () => {
       if (error) throw error;
       
       if (data && data.success) {
-        // Add the generated tip to the database
         const { data: newTip, error: insertError } = await supabase
           .from('health_tips')
           .insert({
@@ -161,7 +210,6 @@ const HealthTips = () => {
           
         if (insertError) throw insertError;
         
-        setHealthTips(prev => [...prev, newTip as HealthTip]);
         toast.success('AI-generated health tip added!');
       } else {
         throw new Error(data?.message || 'Failed to generate tip');
@@ -169,6 +217,29 @@ const HealthTips = () => {
     } catch (error: any) {
       console.error('Error generating AI tip:', error.message);
       toast.error(`Failed to generate AI tip: ${error.message}`);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const sendTipNotification = async (tip: HealthTip, action: 'added' | 'updated') => {
+    if (!user?.email) return;
+    
+    try {
+      await supabase.functions.invoke('send-notification', {
+        body: {
+          type: 'email',
+          recipient: user.email,
+          subject: `Health Tip ${action === 'added' ? 'Shared' : 'Updated'}`,
+          message: `
+            <h3>${tip.title}</h3>
+            <p>${tip.content}</p>
+            <p>This tip is now public and visible to other users.</p>
+          `
+        }
+      });
+    } catch (error) {
+      console.error('Error sending tip notification:', error);
     }
   };
 
@@ -177,8 +248,20 @@ const HealthTips = () => {
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold">Health Tips</h2>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={generateAITip}>
-            Generate AI Tip
+          {publicTipsCount > 0 && (
+            <span className="ml-2 text-sm bg-primary/10 px-2 py-1 rounded-full">
+              {publicTipsCount} Public Tips
+            </span>
+          )}
+          <Button variant="outline" onClick={generateAITip} disabled={isGenerating}>
+            {isGenerating ? (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                Generating...
+              </>
+            ) : (
+              <>Generate AI Tip</>
+            )}
           </Button>
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>

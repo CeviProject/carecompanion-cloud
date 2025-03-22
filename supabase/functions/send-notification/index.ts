@@ -53,7 +53,7 @@ serve(async (req) => {
           throw new Error('appointmentDate and doctorName are required for appointment reminders');
         }
         
-        const reminderSubject = 'Upcoming Appointment Reminder';
+        const reminderSubject = subject || 'Upcoming Appointment Reminder';
         const reminderMessage = `
           Hello,
           
@@ -90,9 +90,35 @@ serve(async (req) => {
         result = await sendEmail(recipient, medReminderSubject, medReminderMessage);
         break;
         
+      case 'health_tip':
+        // Special case for health tip notifications
+        const { tipTitle, tipContent } = data || {};
+        if (!tipTitle) {
+          throw new Error('tipTitle is required for health tip notifications');
+        }
+        
+        const tipSubject = 'New Health Tip Available';
+        const tipMessage = `
+          Hello,
+          
+          ${message}
+          
+          ${tipTitle}
+          
+          ${tipContent || ''}
+          
+          Thank you,
+          HealthHub Team
+        `;
+        
+        result = await sendEmail(recipient, tipSubject, tipMessage);
+        break;
+        
       default:
         throw new Error(`Unsupported notification type: ${type}`);
     }
+    
+    console.log(`Notification sent successfully: ${type}`);
     
     return new Response(JSON.stringify({ 
       success: true,

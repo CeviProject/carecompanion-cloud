@@ -1,4 +1,5 @@
-import { useState } from 'react';
+
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -62,6 +63,7 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
   const [loading, setLoading] = useState(false);
   const [fetchingDoctors, setFetchingDoctors] = useState(true);
   const [availableSlots, setAvailableSlots] = useState<string[]>(timeSlots);
+  const [appointments, setAppointments] = useState<any[]>([]);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -71,9 +73,88 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
   });
 
   // Fetch doctors when component mounts
-  useState(() => {
+  useEffect(() => {
     fetchDoctors();
-  });
+    
+    if (user) {
+      fetchUserAppointments();
+      
+      // Set up real-time subscription for appointments
+      const channel = supabase
+        .channel('appointments-changes')
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'appointments',
+            filter: `patient_id=eq.${user.id}`
+          },
+          (payload) => {
+            // Add the new appointment to the state
+            setAppointments(prev => [...prev, payload.new]);
+            
+            // Send a notification about the new appointment
+            sendAppointmentNotification(payload.new);
+            
+            // Update the UI
+            toast.success('New appointment booked!');
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'appointments',
+            filter: `patient_id=eq.${user.id}`
+          },
+          (payload) => {
+            // Update the appointment in the state
+            setAppointments(prev => 
+              prev.map(appt => appt.id === payload.new.id ? payload.new : appt)
+            );
+            
+            // Send a notification about the updated appointment
+            if (payload.new.status === 'confirmed') {
+              sendAppointmentNotification(payload.new, 'confirmed');
+            } else if (payload.new.status === 'cancelled') {
+              sendAppointmentNotification(payload.new, 'cancelled');
+            }
+            
+            // Update the UI
+            toast.info(`Appointment ${payload.new.status}`);
+          }
+        )
+        .subscribe();
+        
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }
+  }, [user]);
+
+  const fetchUserAppointments = async () => {
+    if (!user) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('appointments')
+        .select(`
+          *,
+          doctor_profiles!inner(*)
+        `)
+        .eq('patient_id', user.id)
+        .order('date', { ascending: true });
+        
+      if (error) throw error;
+      
+      setAppointments(data || []);
+    } catch (error) {
+      console.error('Error fetching appointments:', error);
+      toast.error('Failed to load appointments');
+    }
+  };
 
   const fetchDoctors = async () => {
     try {
@@ -204,6 +285,18 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
         }
       }
       
+      // Send a notification email
+      await sendEmailNotification({
+        type: 'appointment_reminder',
+        recipient: user.email || '',
+        message: 'Your appointment has been scheduled successfully.',
+        data: {
+          appointmentDate: format(appointmentDate, 'PPpp'),
+          doctorName: doctors.find(d => d.id === values.doctor_id)?.profiles.first_name + ' ' + 
+                    doctors.find(d => d.id === values.doctor_id)?.profiles.last_name
+        }
+      });
+      
       // Callback when appointment is created
       if (onAppointmentCreated) {
         onAppointmentCreated();
@@ -213,6 +306,72 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
       toast.error('Failed to book appointment');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Helper function to send a notification about an appointment
+  const sendAppointmentNotification = async (appointment: any, type: 'new' | 'confirmed' | 'cancelled' = 'new') => {
+    if (!user?.email) return;
+    
+    try {
+      const doctor = doctors.find(d => d.id === appointment.doctor_id);
+      if (!doctor) return;
+      
+      const doctorName = `${doctor.profiles.first_name} ${doctor.profiles.last_name}`;
+      const appointmentDate = format(new Date(appointment.date), 'PPpp');
+      
+      let subject = '';
+      let message = '';
+      
+      switch (type) {
+        case 'new':
+          subject = 'New Appointment Scheduled';
+          message = `You have scheduled an appointment with Dr. ${doctorName} on ${appointmentDate}.`;
+          break;
+        case 'confirmed':
+          subject = 'Appointment Confirmed';
+          message = `Your appointment with Dr. ${doctorName} on ${appointmentDate} has been confirmed.`;
+          break;
+        case 'cancelled':
+          subject = 'Appointment Cancelled';
+          message = `Your appointment with Dr. ${doctorName} on ${appointmentDate} has been cancelled.`;
+          break;
+      }
+      
+      await sendEmailNotification({
+        type: 'appointment_reminder',
+        recipient: user.email,
+        message,
+        subject,
+        data: {
+          appointmentDate,
+          doctorName
+        }
+      });
+    } catch (error) {
+      console.error('Error sending appointment notification:', error);
+    }
+  };
+
+  // Helper function to send email notification
+  const sendEmailNotification = async (notificationData: {
+    type: string;
+    recipient: string;
+    message: string;
+    subject?: string;
+    data?: any;
+  }) => {
+    try {
+      const response = await supabase.functions.invoke('send-notification', {
+        body: notificationData
+      });
+      
+      if (response.error) throw new Error(response.error.message);
+      
+      return response.data;
+    } catch (error) {
+      console.error('Error sending email notification:', error);
+      throw error;
     }
   };
 

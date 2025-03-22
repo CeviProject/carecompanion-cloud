@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,6 +11,8 @@ import AppointmentBooking from '@/components/patient/AppointmentBooking';
 import HealthTips from '@/components/patient/HealthTips';
 import MedicationReminders from '@/components/patient/MedicationReminders';
 import { supabase } from '@/integrations/supabase/client';
+import { Bell, Calendar, Pill, AlertTriangle } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface HealthQueryResult {
   id: string;
@@ -29,14 +30,21 @@ const PatientDashboard = () => {
   const [upcomingMedications, setUpcomingMedications] = useState<any[]>([]);
   const [upcomingAppointments, setUpcomingAppointments] = useState<any[]>([]);
   const [healthQueryResult, setHealthQueryResult] = useState<HealthQueryResult | null>(null);
+  const [notifications, setNotifications] = useState<{
+    appointments: number;
+    medications: number;
+    healthTips: number;
+  }>({
+    appointments: 0,
+    medications: 0,
+    healthTips: 0
+  });
 
-  // Fetch upcoming medications and appointments for overview
-  React.useEffect(() => {
+  useEffect(() => {
+    if (!user) return;
+    
     const fetchOverviewData = async () => {
-      if (!user) return;
-      
       try {
-        // Fetch upcoming medications (next 24 hours)
         const today = new Date();
         const tomorrow = new Date(today);
         tomorrow.setDate(tomorrow.getDate() + 1);
@@ -51,8 +59,8 @@ const PatientDashboard = () => {
           
         if (medError) throw medError;
         setUpcomingMedications(medications || []);
+        setNotifications(prev => ({ ...prev, medications: medications?.length || 0 }));
         
-        // Fetch upcoming appointments
         const { data: appointments, error: apptError } = await supabase
           .from('appointments')
           .select(`
@@ -67,19 +75,135 @@ const PatientDashboard = () => {
           
         if (apptError) throw apptError;
         setUpcomingAppointments(appointments || []);
+        setNotifications(prev => ({ ...prev, appointments: appointments?.length || 0 }));
+        
+        const { data: healthQuery, error: healthQueryError } = await supabase
+          .from('health_queries')
+          .select('*')
+          .eq('patient_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+          
+        if (!healthQueryError && healthQuery) {
+          setHealthQueryResult(healthQuery as HealthQueryResult);
+        }
       } catch (error) {
         console.error('Error fetching overview data:', error);
       }
     };
     
     fetchOverviewData();
+    
+    const appointmentChannel = supabase
+      .channel('appointment-notifications')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'appointments',
+          filter: `patient_id=eq.${user.id}`
+        },
+        (payload) => {
+          setUpcomingAppointments(prev => [...prev, payload.new]);
+          setNotifications(prev => ({ ...prev, appointments: prev.appointments + 1 }));
+          toast.success('New appointment scheduled!', {
+            action: {
+              label: 'View',
+              onClick: () => setActiveTab('appointments')
+            }
+          });
+        }
+      )
+      .subscribe();
+      
+    const medicationChannel = supabase
+      .channel('medication-notifications')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'medications',
+          filter: `user_id=eq.${user.id}`
+        },
+        (payload) => {
+          const isForToday = isForTodayOrTomorrow(payload.new);
+          if (isForToday) {
+            setUpcomingMedications(prev => [...prev, payload.new]);
+            setNotifications(prev => ({ ...prev, medications: prev.medications + 1 }));
+            toast.success('New medication reminder added!', {
+              action: {
+                label: 'View',
+                onClick: () => setActiveTab('medications')
+              }
+            });
+          }
+        }
+      )
+      .subscribe();
+      
+    const tipsChannel = supabase
+      .channel('tips-notifications')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'health_tips',
+          filter: `is_public=eq.true`
+        },
+        (payload) => {
+          if (payload.new.user_id !== user.id) {
+            setNotifications(prev => ({ ...prev, healthTips: prev.healthTips + 1 }));
+            toast.info('New health tip shared!', {
+              action: {
+                label: 'View',
+                onClick: () => setActiveTab('health-tips')
+              }
+            });
+          }
+        }
+      )
+      .subscribe();
+    
+    return () => {
+      supabase.removeChannel(appointmentChannel);
+      supabase.removeChannel(medicationChannel);
+      supabase.removeChannel(tipsChannel);
+    };
   }, [user]);
 
-  // Handle the submission of a health query
+  const isForTodayOrTomorrow = (medication: any) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    const startDate = new Date(medication.start_date);
+    startDate.setHours(0, 0, 0, 0);
+    
+    return startDate.getTime() === today.getTime() || startDate.getTime() === tomorrow.getTime();
+  };
+
   const handleQuerySubmitted = (queryData: HealthQueryResult) => {
     setHealthQueryResult(queryData);
-    // Switch to the assessment tab after a query is submitted
     setActiveTab('assessment');
+    toast.success('Health query submitted successfully!');
+  };
+
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+    
+    if (value === 'appointments') {
+      setNotifications(prev => ({ ...prev, appointments: 0 }));
+    } else if (value === 'medications') {
+      setNotifications(prev => ({ ...prev, medications: 0 }));
+    } else if (value === 'health-tips') {
+      setNotifications(prev => ({ ...prev, healthTips: 0 }));
+    }
   };
 
   if (!user || !profile) {
@@ -109,14 +233,35 @@ const PatientDashboard = () => {
         </p>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4">
         <TabsList className="grid grid-cols-3 lg:grid-cols-7 w-full">
           <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="appointments">Appointments</TabsTrigger>
-          <TabsTrigger value="medications">Medications</TabsTrigger>
+          <TabsTrigger value="appointments" className="relative">
+            Appointments
+            {notifications.appointments > 0 && (
+              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                {notifications.appointments}
+              </span>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="medications" className="relative">
+            Medications
+            {notifications.medications > 0 && (
+              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                {notifications.medications}
+              </span>
+            )}
+          </TabsTrigger>
           <TabsTrigger value="health-query">Health Query</TabsTrigger>
           <TabsTrigger value="assessment">Assessment</TabsTrigger>
-          <TabsTrigger value="health-tips">Health Tips</TabsTrigger>
+          <TabsTrigger value="health-tips" className="relative">
+            Health Tips
+            {notifications.healthTips > 0 && (
+              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                {notifications.healthTips}
+              </span>
+            )}
+          </TabsTrigger>
           <TabsTrigger value="doctors">Find Doctors</TabsTrigger>
         </TabsList>
 
@@ -127,7 +272,7 @@ const PatientDashboard = () => {
                 <CardTitle className="text-sm font-medium">Your Health Status</CardTitle>
               </CardHeader>
               <CardContent>
-                <HealthAssessment minimalView={true} />
+                <HealthAssessment minimalView={!healthQueryResult} />
                 <Button 
                   onClick={() => setActiveTab('health-query')} 
                   variant="outline" 
@@ -141,6 +286,7 @@ const PatientDashboard = () => {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Upcoming Medications</CardTitle>
+                <Pill className="h-4 w-4 text-primary" />
               </CardHeader>
               <CardContent>
                 {upcomingMedications.length === 0 ? (
@@ -170,6 +316,7 @@ const PatientDashboard = () => {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Upcoming Appointments</CardTitle>
+                <Calendar className="h-4 w-4 text-primary" />
               </CardHeader>
               <CardContent>
                 {upcomingAppointments.length === 0 ? (

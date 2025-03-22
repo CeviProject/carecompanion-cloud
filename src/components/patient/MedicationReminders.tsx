@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,7 +9,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { PlusCircle, Calendar as CalendarIcon, Clock, Pill, AlertTriangle, Check, Trash2 } from "lucide-react";
-import { format, addDays } from 'date-fns';
+import { format, addDays, isToday } from 'date-fns';
 import { cn } from "@/lib/utils";
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
@@ -54,12 +53,66 @@ const MedicationReminders = () => {
   });
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [isEndDateCalendarOpen, setIsEndDateCalendarOpen] = useState(false);
+  const [todaysMedications, setTodaysMedications] = useState<Medication[]>([]);
 
   useEffect(() => {
     if (user) {
       fetchMedications();
+      
+      // Set up real-time subscription for medications
+      const channel = supabase
+        .channel('medications-changes')
+        .on(
+          'postgres_changes',
+          {
+            event: '*', // Listen to all changes (INSERT, UPDATE, DELETE)
+            schema: 'public',
+            table: 'medications',
+            filter: `user_id=eq.${user.id}`
+          },
+          (payload) => {
+            if (payload.eventType === 'INSERT') {
+              setMedications(prev => [payload.new as Medication, ...prev]);
+              checkIfMedicationDueToday(payload.new as Medication);
+              toast.success(`Medication "${payload.new.name}" added`);
+            } else if (payload.eventType === 'UPDATE') {
+              setMedications(prev => 
+                prev.map(med => med.id === payload.new.id ? payload.new as Medication : med)
+              );
+              toast.info(`Medication "${payload.new.name}" updated`);
+            } else if (payload.eventType === 'DELETE') {
+              setMedications(prev => prev.filter(med => med.id !== payload.old.id));
+              toast.info(`Medication removed`);
+            }
+          }
+        )
+        .subscribe();
+        
+      return () => {
+        supabase.removeChannel(channel);
+      };
     }
   }, [user]);
+
+  // Set up notification checks for today's medications
+  useEffect(() => {
+    if (medications.length > 0) {
+      const todayMeds = filterTodaysMedications(medications);
+      setTodaysMedications(todayMeds);
+      
+      // If we have medications due today, set up reminders
+      if (todayMeds.length > 0) {
+        const checkInterval = setInterval(() => {
+          checkMedicationReminders(todayMeds);
+        }, 60000); // Check every minute
+        
+        // Initial check
+        checkMedicationReminders(todayMeds);
+        
+        return () => clearInterval(checkInterval);
+      }
+    }
+  }, [medications]);
 
   const fetchMedications = async () => {
     try {
@@ -78,6 +131,79 @@ const MedicationReminders = () => {
       toast.error(`Failed to load medications: ${error.message}`);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const filterTodaysMedications = (meds: Medication[]) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    return meds.filter(med => {
+      const startDate = new Date(med.start_date);
+      startDate.setHours(0, 0, 0, 0);
+      
+      const endDate = med.end_date ? new Date(med.end_date) : null;
+      if (endDate) endDate.setHours(0, 0, 0, 0);
+      
+      return startDate <= today && (!endDate || endDate >= today);
+    });
+  };
+
+  const checkIfMedicationDueToday = (medication: Medication) => {
+    const startDate = new Date(medication.start_date);
+    const today = new Date();
+    
+    if (isToday(startDate)) {
+      setTodaysMedications(prev => [...prev, medication]);
+    }
+  };
+
+  const checkMedicationReminders = (todayMeds: Medication[]) => {
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+    
+    todayMeds.forEach(med => {
+      const [medHour, medMinute] = med.time.split(':').map(Number);
+      
+      // If it's time for this medication (within a 5-minute window)
+      if (currentHour === medHour && Math.abs(currentMinute - medMinute) <= 5) {
+        // Show a toast notification
+        toast.warning(
+          `Time to take ${med.name} (${med.dosage})`,
+          {
+            duration: 10000, // Long duration
+            action: {
+              label: "Dismiss",
+              onClick: () => {}
+            }
+          }
+        );
+        
+        // Send an email notification
+        sendMedicationReminder(med);
+      }
+    });
+  };
+
+  const sendMedicationReminder = async (medication: Medication) => {
+    if (!user?.email) return;
+    
+    try {
+      await supabase.functions.invoke('send-notification', {
+        body: {
+          type: 'medication_reminder',
+          recipient: user.email,
+          message: `Remember to take your medication at ${medication.time}.`,
+          data: {
+            medicationName: medication.name,
+            dosage: medication.dosage,
+            time: medication.time
+          }
+        }
+      });
+    } catch (error) {
+      console.error('Error sending medication reminder:', error);
     }
   };
 
@@ -113,15 +239,10 @@ const MedicationReminders = () => {
         // Don't stop the flow, just notify the user
         toast.error('Medication saved but could not add to Google Calendar');
       }
-
-      // Add the new medication to the state
-      setMedications(prev => [data as Medication, ...prev]);
       
       // Reset form and close dialog
       resetForm();
       setIsAddDialogOpen(false);
-      
-      toast.success('Medication added successfully!');
     } catch (error: any) {
       console.error('Error adding medication:', error);
       toast.error(`Failed to add medication: ${error.message}`);
@@ -136,9 +257,6 @@ const MedicationReminders = () => {
         .eq('id', id);
 
       if (error) throw error;
-
-      setMedications(prev => prev.filter(med => med.id !== id));
-      toast.success('Medication deleted successfully');
     } catch (error: any) {
       console.error('Error deleting medication:', error);
       toast.error(`Failed to delete medication: ${error.message}`);
