@@ -25,16 +25,8 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
   const [isEnabled, setIsEnabled] = useState(false);
   const [tokens, setTokens] = useState<GoogleCalendarTokens | null>(null);
   const [isMounted, setIsMounted] = useState(false);
-  
-  // Instead of using a ref for the window and interval, use state to track them
-  const [authStateData, setAuthStateData] = useState<{
-    window: Window | null;
-    messageHandler: ((event: MessageEvent) => void) | null;
-  }>({
-    window: null,
-    messageHandler: null
-  });
 
+  // Setup event listener for receiving auth code from popup
   useEffect(() => {
     setIsMounted(true);
     console.log('GoogleCalendarProvider mounted');
@@ -62,18 +54,19 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
       fetchTokensFromDatabase();
     }
     
-    // Setup event listener for message from the popup
-    const handleMessage = (event: MessageEvent) => {
-      console.log('Received message event in parent window:', event);
+    // Handler for receiving messages from the popup
+    const handleAuthMessage = (event: MessageEvent) => {
       // Only process messages from our expected origin
       if (event.origin !== window.location.origin) {
         console.log('Ignoring message from unexpected origin:', event.origin);
         return;
       }
       
+      console.log('Received message in parent window:', event.data);
+      
       // Handle auth callback
       if (event.data && event.data.type === 'google_auth_callback' && event.data.code) {
-        console.log('Received auth callback with code:', event.data.code);
+        console.log('Received auth code from popup:', event.data.code);
         handleAuthCode(event.data.code);
       } 
       // Handle auth error
@@ -83,28 +76,46 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
       }
     };
     
-    // Add the global message listener
-    window.addEventListener('message', handleMessage);
-
+    // Add event listener
+    window.addEventListener('message', handleAuthMessage);
+    
+    // Check for auth code in localStorage (fallback method for popup failures)
+    const checkLocalStorageAuth = () => {
+      const storedCode = localStorage.getItem('google_auth_code');
+      const timestamp = localStorage.getItem('google_auth_timestamp');
+      
+      if (storedCode && timestamp) {
+        const age = Date.now() - parseInt(timestamp);
+        
+        // Only use codes that are less than 5 minutes old
+        if (age < 5 * 60 * 1000) {
+          console.log('Found valid auth code in localStorage');
+          handleAuthCode(storedCode);
+          
+          // Clear the stored code after using
+          localStorage.removeItem('google_auth_code');
+          localStorage.removeItem('google_auth_timestamp');
+        } else {
+          // Clear expired code
+          localStorage.removeItem('google_auth_code');
+          localStorage.removeItem('google_auth_timestamp');
+        }
+      }
+    };
+    
+    // Run once on mount
+    checkLocalStorageAuth();
+    
     return () => {
       setIsMounted(false);
       console.log('GoogleCalendarProvider unmounting');
       
-      // Clean up the message listener
-      window.removeEventListener('message', handleMessage);
-      
-      // Close any open auth window
-      if (authStateData.window && !authStateData.window.closed) {
-        try {
-          authStateData.window.close();
-        } catch (err) {
-          console.error('Error closing auth window:', err);
-        }
-      }
+      // Remove the message listener
+      window.removeEventListener('message', handleAuthMessage);
     };
   }, [user]);
 
-  // Handle auth code from the popup
+  // Handle auth code from the popup or localStorage
   const handleAuthCode = async (authCode: string) => {
     if (!isMounted || !user) {
       console.error('Component not mounted or user not logged in, cannot handle auth code');
@@ -222,34 +233,17 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
       
       console.log('Received authorization URL:', data?.authUrl);
       
-      // Close any existing auth window
-      if (authStateData.window && !authStateData.window.closed) {
-        try {
-          authStateData.window.close();
-        } catch (err) {
-          console.error('Error closing existing auth window:', err);
-        }
-      }
-      
-      // Open the authorization URL in a new window
-      // Use window.open with specific features to avoid COOP issues
+      // Open the authorization URL in a new tab/window
+      // Using 'noopener,noreferrer' to prevent COOP issues
       const authWindow = window.open(
         data.authUrl, 
         '_blank', 
-        'width=500,height=600,noopener'
+        'width=600,height=700,noopener,noreferrer'
       );
-      
-      // Update the state with the new window
-      setAuthStateData({
-        window: authWindow,
-        messageHandler: null
-      });
       
       if (!authWindow) {
         toast.error('Popup blocked. Please allow popups for this site.');
-        return;
       }
-      
     } catch (error) {
       console.error('Error authorizing Google Calendar:', error);
       toast.error('Failed to connect to Google Calendar');

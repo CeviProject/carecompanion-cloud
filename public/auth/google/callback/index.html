@@ -99,24 +99,66 @@
     const error = urlParams.get('error');
     const errorDescription = urlParams.get('error_description');
     
-    // Function to safely communicate with the opener window
-    function postMessageToOpener(message) {
+    // Get the origin for message posting - important for production
+    const appOrigin = window.location.origin;
+    console.log("Callback page loaded. App origin:", appOrigin);
+    
+    // Try to communicate with opener if available
+    if (code && state === 'google_calendar_auth') {
+      document.getElementById('status').textContent = 'Authorization Successful!';
+      
+      // First try localStorage as a fallback method
+      try {
+        localStorage.setItem('google_auth_code', code);
+        localStorage.setItem('google_auth_timestamp', Date.now().toString());
+        console.log('Stored auth code in localStorage as fallback');
+      } catch (e) {
+        console.error('Failed to store in localStorage:', e);
+      }
+      
+      // Try to send message to opener
       try {
         if (window.opener) {
-          // Use postMessage with explicit origin for better security
-          const targetOrigin = window.location.origin;
-          console.log('Posting message to opener with origin:', targetOrigin);
-          window.opener.postMessage(message, targetOrigin);
-          return true;
+          console.log('Sending auth code to opener...');
+          
+          // Post message to parent window
+          window.opener.postMessage({
+            type: 'google_auth_callback',
+            code: code
+          }, appOrigin);
+          
+          console.log('Message sent to opener');
+        } else {
+          console.warn('Opener window not available');
+          
+          // Set a flag in localStorage to indicate redirect should be processed
+          try {
+            sessionStorage.setItem('process_google_auth', 'true');
+            console.log('Set redirect flag in sessionStorage');
+          } catch (e) {
+            console.error('Failed to set sessionStorage flag:', e);
+          }
+          
+          // Redirect back to the main application
+          window.location.href = appOrigin + '/dashboard/patient';
         }
       } catch (e) {
-        console.error('Error posting message to opener:', e);
+        console.error('Error communicating with opener:', e);
+        document.getElementById('error-container').style.display = 'block';
+        document.getElementById('error-message').textContent = 'Error communicating with main application. Please close this window and return to the app.';
       }
-      return false;
-    }
-    
-    // Update status based on the callback results
-    if (error) {
+      
+      // Close window after short delay
+      setTimeout(() => {
+        if (window.opener) {
+          window.close();
+        } else {
+          // If no opener, redirect to main app
+          window.location.href = appOrigin + '/dashboard/patient';
+        }
+      }, 2000);
+    } else if (error) {
+      // Handle authorization error
       document.getElementById('spinner').style.display = 'none';
       document.getElementById('error-container').style.display = 'block';
       document.getElementById('error-message').textContent = errorDescription || error;
@@ -127,38 +169,27 @@
         document.getElementById('verification-help').style.display = 'block';
       }
       
-      // Notify the opener about the error
-      postMessageToOpener({ 
-        type: 'google_auth_error',
-        error: error,
-        errorDescription: errorDescription
-      });
-      
-      // Close window after a few seconds even in case of error
-      setTimeout(() => {
-        window.close();
-      }, 3000);
-    } else if (code && state === 'google_calendar_auth') {
-      // Try to send message to opener window
-      document.getElementById('status').textContent = 'Authorization Successful!';
-      
-      const messageSent = postMessageToOpener({ 
-        type: 'google_auth_callback',
-        code: code
-      });
-      
-      if (messageSent) {
-        console.log('Successfully sent authorization code to opener');
-      } else {
-        console.error('Failed to communicate with opener window');
-        document.getElementById('error-container').style.display = 'block';
-        document.getElementById('error-message').textContent = 'Main window not found. Please close this window and return to the application.';
+      // Try to notify opener about error
+      try {
+        if (window.opener) {
+          window.opener.postMessage({
+            type: 'google_auth_error',
+            error: error,
+            errorDescription: errorDescription
+          }, appOrigin);
+        }
+      } catch (e) {
+        console.error('Error notifying opener about auth error:', e);
       }
       
-      // Close the window automatically after a short delay
+      // Close window or redirect after delay
       setTimeout(() => {
-        window.close();
-      }, 2000);
+        if (window.opener) {
+          window.close();
+        } else {
+          window.location.href = appOrigin + '/dashboard/patient';
+        }
+      }, 3000);
     } else {
       // Invalid response
       document.getElementById('spinner').style.display = 'none';
@@ -166,9 +197,13 @@
       document.getElementById('error-message').textContent = 'Invalid authorization response.';
       document.getElementById('status').textContent = 'Invalid Response';
       
-      // Close window after a few seconds
+      // Close window after delay
       setTimeout(() => {
-        window.close();
+        if (window.opener) {
+          window.close();
+        } else {
+          window.location.href = appOrigin + '/dashboard/patient';
+        }
       }, 3000);
     }
   </script>
