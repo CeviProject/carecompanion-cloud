@@ -11,6 +11,7 @@ import PatientDashboard from "./pages/dashboard/PatientDashboard";
 import DoctorDashboard from "./pages/dashboard/DoctorDashboard";
 import NotFound from "./pages/NotFound";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import { GoogleCalendarProvider } from "./context/GoogleCalendarContext";
 import { Skeleton } from "./components/ui/skeleton";
 import About from "./pages/About";
 import Features from "./pages/Features";
@@ -82,33 +83,35 @@ const PublicOnlyRoute = ({ children, redirectTo }: { children: React.ReactNode, 
 // App with Auth provider wrapper
 const AppWithAuth = () => (
   <AuthProvider>
-    <Routes>
-      <Route path="/" element={<Index />} />
-      <Route path="/about" element={<About />} />
-      <Route path="/features" element={<Features />} />
-      <Route path="/auth/login" element={
-        <PublicOnlyRoute>
-          <Login />
-        </PublicOnlyRoute>
-      } />
-      <Route path="/auth/register" element={
-        <PublicOnlyRoute>
-          <Register />
-        </PublicOnlyRoute>
-      } />
-      <Route path="/dashboard/patient" element={
-        <ProtectedRoute requiredRole="patient">
-          <PatientDashboard />
-        </ProtectedRoute>
-      } />
-      <Route path="/dashboard/doctor" element={
-        <ProtectedRoute requiredRole="doctor">
-          <DoctorDashboard />
-        </ProtectedRoute>
-      } />
-      {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-      <Route path="*" element={<NotFound />} />
-    </Routes>
+    <GoogleCalendarProvider>
+      <Routes>
+        <Route path="/" element={<Index />} />
+        <Route path="/about" element={<About />} />
+        <Route path="/features" element={<Features />} />
+        <Route path="/auth/login" element={
+          <PublicOnlyRoute>
+            <Login />
+          </PublicOnlyRoute>
+        } />
+        <Route path="/auth/register" element={
+          <PublicOnlyRoute>
+            <Register />
+          </PublicOnlyRoute>
+        } />
+        <Route path="/dashboard/patient" element={
+          <ProtectedRoute requiredRole="patient">
+            <PatientDashboard />
+          </ProtectedRoute>
+        } />
+        <Route path="/dashboard/doctor" element={
+          <ProtectedRoute requiredRole="doctor">
+            <DoctorDashboard />
+          </ProtectedRoute>
+        } />
+        {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </GoogleCalendarProvider>
   </AuthProvider>
 );
 

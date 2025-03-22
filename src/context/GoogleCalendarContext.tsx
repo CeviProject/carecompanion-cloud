@@ -109,6 +109,11 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
       // Open the authorization URL in a new window
       const authWindow = window.open(data.authUrl, 'googleAuthWindow', 'width=500,height=600');
       
+      if (!authWindow) {
+        toast.error('Popup blocked. Please allow popups for this site.');
+        return;
+      }
+      
       // Listen for the redirect back from Google with the authorization code
       const handleAuthCallback = async (event: MessageEvent) => {
         // Only process messages from our expected origin

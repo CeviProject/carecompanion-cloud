@@ -4,6 +4,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const GOOGLE_CLIENT_ID = Deno.env.get('GOOGLE_CLIENT_ID');
 const GOOGLE_CLIENT_SECRET = Deno.env.get('GOOGLE_CLIENT_SECRET');
+// This should match exactly what you configured in Google Cloud Console
+// The default is http://localhost:3000/auth/google/callback
 const REDIRECT_URI = Deno.env.get('REDIRECT_URI') || 'http://localhost:3000/auth/google/callback';
 
 const corsHeaders = {
@@ -50,6 +52,7 @@ serve(async (req) => {
         'https://www.googleapis.com/auth/calendar.events',
       ];
       
+      console.log(`Using redirect URI: ${REDIRECT_URI}`);
       const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
       authUrl.searchParams.append('client_id', GOOGLE_CLIENT_ID);
       authUrl.searchParams.append('redirect_uri', REDIRECT_URI);
@@ -136,7 +139,7 @@ serve(async (req) => {
                     sql: `
                       CREATE TABLE IF NOT EXISTS public.user_integrations (
                         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                        user_id UUID NOT NULL,
+                        user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
                         provider TEXT NOT NULL,
                         access_token TEXT NOT NULL,
                         refresh_token TEXT,
