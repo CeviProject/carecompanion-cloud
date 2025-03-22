@@ -735,7 +735,7 @@ const GoogleCalendarToggle = ({ onAuthorize }: { onAuthorize: () => void }) => {
   const toggleCalendar = () => {
     const newState = !enabled;
     setEnabled(newState);
-    localStorage.setItem('googleCalendarEnabled', newState);
+    localStorage.setItem('googleCalendarEnabled', String(newState));
     
     if (newState) {
       onAuthorize();
