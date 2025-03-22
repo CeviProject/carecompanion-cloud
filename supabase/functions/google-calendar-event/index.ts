@@ -25,11 +25,12 @@ serve(async (req) => {
       throw new Error('Google Calendar API credentials are not configured. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in the environment variables.');
     }
 
-    const url = new URL(req.url);
-    const path = url.pathname.split('/').pop();
+    // Parse the request body to get the action
+    const { action, ...data } = await req.json();
+    console.log(`Processing action: ${action}`);
 
     // Generate OAuth URL for user authorization
-    if (path === 'authorize') {
+    if (action === 'authorize') {
       const scopes = [
         'https://www.googleapis.com/auth/calendar',
         'https://www.googleapis.com/auth/calendar.events',
@@ -51,8 +52,8 @@ serve(async (req) => {
     }
     
     // Exchange authorization code for tokens
-    if (path === 'token') {
-      const { code } = await req.json();
+    if (action === 'token') {
+      const { code } = data;
       
       if (!code) {
         throw new Error('Authorization code is required');
@@ -90,8 +91,8 @@ serve(async (req) => {
     }
     
     // Refresh an expired access token
-    if (path === 'refresh') {
-      const { refresh_token } = await req.json();
+    if (action === 'refresh') {
+      const { refresh_token } = data;
       
       if (!refresh_token) {
         throw new Error('Refresh token is required');
@@ -127,8 +128,8 @@ serve(async (req) => {
     }
     
     // Create a calendar event
-    if (path === 'create' || !path) {
-      const { event, accessToken } = await req.json();
+    if (action === 'create') {
+      const { event, accessToken } = data;
       
       if (!event || !event.summary || !event.startTime || !event.endTime) {
         throw new Error('Invalid event data. Required fields: summary, startTime, endTime');
@@ -195,8 +196,8 @@ serve(async (req) => {
       });
     }
     
-    // If no valid path is matched
-    throw new Error('Invalid request path');
+    // If no valid action is matched
+    throw new Error('Invalid action specified. Valid actions are: authorize, token, refresh, create');
     
   } catch (error) {
     console.error('Error in google-calendar-event function:', error);

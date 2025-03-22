@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -75,7 +74,6 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
     },
   });
 
-  // Fetch doctors when component mounts
   useEffect(() => {
     fetchDoctors();
     
@@ -83,7 +81,6 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
       fetchUserAppointments();
       checkGoogleCalendarAuth();
       
-      // Set up real-time subscription for appointments
       const channel = supabase
         .channel('appointments-changes')
         .on(
@@ -95,13 +92,8 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
             filter: `patient_id=eq.${user.id}`
           },
           (payload) => {
-            // Add the new appointment to the state
             setAppointments(prev => [...prev, payload.new]);
-            
-            // Send a notification about the new appointment
             sendAppointmentNotification(payload.new);
-            
-            // Update the UI
             toast.success('New appointment booked!');
           }
         )
@@ -114,19 +106,14 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
             filter: `patient_id=eq.${user.id}`
           },
           (payload) => {
-            // Update the appointment in the state
             setAppointments(prev => 
               prev.map(appt => appt.id === payload.new.id ? payload.new : appt)
             );
-            
-            // Send a notification about the updated appointment
             if (payload.new.status === 'confirmed') {
               sendAppointmentNotification(payload.new, 'confirmed');
             } else if (payload.new.status === 'cancelled') {
               sendAppointmentNotification(payload.new, 'cancelled');
             }
-            
-            // Update the UI
             toast.info(`Appointment ${payload.new.status}`);
           }
         )
@@ -138,22 +125,17 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
     }
   }, [user]);
 
-  // Check if user has authorized Google Calendar
   const checkGoogleCalendarAuth = () => {
-    // Check for access token in localStorage
     const tokens = getGoogleCalendarTokens();
     
-    // Check if token has expired
     if (tokens?.access_token && tokens?.expires_at) {
       const now = Date.now();
       const expiresAt = tokens.expires_at;
       
       if (now >= expiresAt) {
-        // Token expired, refresh it if we have a refresh token
         if (tokens.refresh_token) {
           refreshGoogleToken(tokens.refresh_token);
         } else {
-          // No refresh token, need to reauthorize
           localStorage.removeItem('googleCalendarTokens');
           localStorage.setItem('googleCalendarEnabled', 'false');
         }
@@ -161,7 +143,6 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
     }
   };
 
-  // Get Google Calendar tokens from localStorage
   const getGoogleCalendarTokens = () => {
     const tokensStr = localStorage.getItem('googleCalendarTokens');
     if (!tokensStr) return null;
@@ -174,9 +155,7 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
     }
   };
   
-  // Save Google Calendar tokens to localStorage
   const saveGoogleCalendarTokens = (tokens: any) => {
-    // Calculate expires_at timestamp
     const expiresAt = Date.now() + (tokens.expires_in * 1000);
     const tokensToSave = {
       ...tokens,
@@ -187,20 +166,18 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
     localStorage.setItem('googleCalendarEnabled', 'true');
   };
 
-  // Refresh Google access token
   const refreshGoogleToken = async (refreshToken: string) => {
     try {
       const response = await supabase.functions.invoke('google-calendar-event', {
         body: { 
-          refresh_token: refreshToken 
-        },
-        path: '/refresh'
+          refresh_token: refreshToken,
+          action: 'refresh' 
+        }
       });
       
       if (response.error) throw new Error(response.error.message);
       
       if (response.data.access_token) {
-        // Update tokens in localStorage
         const currentTokens = getGoogleCalendarTokens();
         saveGoogleCalendarTokens({
           ...currentTokens,
@@ -212,19 +189,16 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
       }
     } catch (error) {
       console.error('Error refreshing Google token:', error);
-      // Clear tokens if refresh failed
       localStorage.removeItem('googleCalendarTokens');
       localStorage.setItem('googleCalendarEnabled', 'false');
       return null;
     }
   };
 
-  // Handle Google authorization
   const handleGoogleAuthorize = async () => {
     try {
       const response = await supabase.functions.invoke('google-calendar-event', {
-        body: {},
-        path: '/authorize'
+        body: { action: 'authorize' }
       });
       
       if (response.error) throw new Error(response.error.message);
@@ -239,12 +213,13 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
     }
   };
 
-  // Handle Google auth callback
   const handleGoogleAuthCallback = async (code: string) => {
     try {
       const response = await supabase.functions.invoke('google-calendar-event', {
-        body: { code },
-        path: '/token'
+        body: { 
+          code,
+          action: 'token'
+        }
       });
       
       if (response.error) throw new Error(response.error.message);
@@ -312,7 +287,6 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
     const selectedDate = format(date, 'yyyy-MM-dd');
     
     try {
-      // Get doctor's general availability
       const { data: doctorData, error: doctorError } = await supabase
         .from('doctor_profiles')
         .select('availability')
@@ -321,7 +295,6 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
       
       if (doctorError) throw doctorError;
       
-      // Get existing appointments for this doctor on this date
       const { data: appointments, error: appointmentsError } = await supabase
         .from('appointments')
         .select('date')
@@ -331,23 +304,18 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
       
       if (appointmentsError) throw appointmentsError;
       
-      // Get day of week
       const dayOfWeek = format(date, 'EEEE').toLowerCase();
       
-      // Filter available slots based on doctor's availability and existing appointments
       let available = [...timeSlots];
       
-      // Filter based on doctor's weekly schedule
       if (doctorData?.availability && doctorData.availability[dayOfWeek]) {
         const doctorHours = doctorData.availability[dayOfWeek];
         if (doctorHours.length === 0) {
-          available = []; // Doctor not available on this day
+          available = [];
         } else {
-          // Here we'd filter based on doctor's hours, but for simplicity we'll keep the default slots
         }
       }
       
-      // Filter out already booked slots
       if (appointments && appointments.length > 0) {
         const bookedTimes = appointments.map(appt => {
           const apptDate = new Date(appt.date);
@@ -373,7 +341,6 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
     setLoading(true);
     
     try {
-      // Format date and time for database
       const appointmentDate = new Date(values.date);
       const [hours, minutes] = values.time.split(':');
       appointmentDate.setHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0);
@@ -394,11 +361,9 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
       toast.success('Appointment booked successfully!');
       form.reset();
       
-      // Add to Google Calendar if integration is enabled
       const tokens = getGoogleCalendarTokens();
       if (tokens?.access_token) {
         try {
-          // Get doctor's name
           const doctor = doctors.find(d => d.id === values.doctor_id);
           const doctorName = doctor ? 
             `Dr. ${doctor.profiles.first_name} ${doctor.profiles.last_name}` : 
@@ -408,18 +373,16 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
             summary: `Medical Appointment with ${doctorName}`,
             description: values.reason,
             startTime: appointmentDate.toISOString(),
-            endTime: new Date(appointmentDate.getTime() + 30 * 60000).toISOString(), // 30 min appointment
+            endTime: new Date(appointmentDate.getTime() + 30 * 60000).toISOString(),
             accessToken: tokens.access_token
           });
           toast.success('Added to Google Calendar');
         } catch (calendarError: any) {
           console.error('Failed to add to Google Calendar:', calendarError);
           
-          // If error is due to invalid token, try to refresh
           if (calendarError.message?.includes('401') && tokens.refresh_token) {
             const newToken = await refreshGoogleToken(tokens.refresh_token);
             if (newToken) {
-              // Retry with new token
               try {
                 await addToGoogleCalendar({
                   summary: `Medical Appointment`,
@@ -440,7 +403,6 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
         }
       }
       
-      // Send a notification email
       await sendEmailNotification({
         type: 'appointment_reminder',
         recipient: user.email || '',
@@ -452,7 +414,6 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
         }
       });
       
-      // Callback when appointment is created
       if (onAppointmentCreated) {
         onAppointmentCreated();
       }
@@ -464,7 +425,6 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
     }
   };
 
-  // Helper function to send a notification about an appointment
   const sendAppointmentNotification = async (appointment: any, type: 'new' | 'confirmed' | 'cancelled' = 'new') => {
     if (!user?.email) return;
     
@@ -508,7 +468,6 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
     }
   };
 
-  // Helper function to send email notification
   const sendEmailNotification = async (notificationData: {
     type: string;
     recipient: string;
@@ -530,7 +489,6 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
     }
   };
 
-  // Helper function to add to Google Calendar
   const addToGoogleCalendar = async (event: {
     summary: string;
     description: string;
@@ -547,9 +505,9 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
             startTime: event.startTime,
             endTime: event.endTime
           }, 
-          accessToken: event.accessToken 
-        },
-        path: '/create'
+          accessToken: event.accessToken,
+          action: 'create'
+        }
       });
       
       if (response.error) throw new Error(response.error.message);
@@ -561,18 +519,13 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
     }
   };
 
-  // Process URL params for Google OAuth callback
   useEffect(() => {
     const url = new URL(window.location.href);
     const code = url.searchParams.get('code');
     const state = url.searchParams.get('state');
     
-    // If we have a code and it's a Google Calendar auth callback
     if (code && state === 'google_calendar_auth') {
-      // Remove the query params
       window.history.replaceState({}, document.title, window.location.pathname);
-      
-      // Exchange the code for tokens
       handleGoogleAuthCallback(code);
     }
   }, []);
@@ -657,11 +610,9 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
                             }
                           }}
                           disabled={(date) => {
-                            // Disable past dates
                             const today = new Date();
                             today.setHours(0, 0, 0, 0);
                             
-                            // Disable weekends (optional)
                             const day = date.getDay();
                             const isWeekend = day === 0 || day === 6;
                             
@@ -776,7 +727,6 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
   );
 };
 
-// Google Calendar integration toggle
 const GoogleCalendarToggle = ({ onAuthorize }: { onAuthorize: () => void }) => {
   const [enabled, setEnabled] = useState(() => 
     localStorage.getItem('googleCalendarEnabled') === 'true'
@@ -785,13 +735,11 @@ const GoogleCalendarToggle = ({ onAuthorize }: { onAuthorize: () => void }) => {
   const toggleCalendar = () => {
     const newState = !enabled;
     setEnabled(newState);
-    localStorage.setItem('googleCalendarEnabled', newState.toString());
+    localStorage.setItem('googleCalendarEnabled', newState);
     
     if (newState) {
-      // Redirect to Google auth
       onAuthorize();
     } else {
-      // Remove tokens
       localStorage.removeItem('googleCalendarTokens');
       toast.info('Google Calendar integration disabled');
     }
