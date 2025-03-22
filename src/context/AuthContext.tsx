@@ -33,6 +33,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log('Auth state changed:', event, session?.user?.id);
+        
+        if (event === 'SIGNED_OUT') {
+          console.log('SIGNED_OUT event detected, clearing state');
+          setSession(null);
+          setUser(null);
+          setProfile(null);
+          setIsAuthenticated(false);
+          // Force navigate to home on sign out
+          navigate('/', { replace: true });
+          return;
+        }
+        
         setSession(session);
         setUser(session?.user ?? null);
         setIsAuthenticated(!!session?.user); // Update authentication flag
@@ -158,7 +170,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const signOut = async () => {
     try {
       console.log('Signing out...');
-      // First attempt the sign out
+      
+      // First clear local state (do this BEFORE the API call to ensure UI updates immediately)
+      setSession(null);
+      setUser(null);
+      setProfile(null);
+      setIsAuthenticated(false);
+      
+      // Now call the API to sign out
       const { error } = await supabase.auth.signOut();
       
       if (error) {
@@ -168,19 +187,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       
       console.log('Successfully signed out from Supabase');
       
-      // Clear local state
-      setSession(null);
-      setUser(null);
-      setProfile(null);
-      setIsAuthenticated(false);
-      
-      // Navigate to home page
-      console.log('Navigating to home page');
+      // Force navigate to home page
       navigate('/', { replace: true });
       toast.success('Logged out successfully');
     } catch (error: any) {
       console.error('Sign out error:', error);
       toast.error(error.message || 'Failed to sign out');
+      // Still navigate to home even if there was an error
+      navigate('/', { replace: true });
     }
   };
 

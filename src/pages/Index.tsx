@@ -1,32 +1,56 @@
-
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import { useAuth } from '@/context/AuthContext';
+import { useEffect } from 'react';
 
 const Index = () => {
   const { isAuthenticated, profile, loading } = useAuth();
   const navigate = useNavigate();
 
+  useEffect(() => {
+    console.log('Index page - Auth state:', { isAuthenticated, profileExists: !!profile, loading });
+  }, [isAuthenticated, profile, loading]);
+
   const handleGetStarted = () => {
+    if (loading) {
+      console.log('Auth state is still loading, not redirecting yet');
+      return;
+    }
+
     if (isAuthenticated && profile) {
-      console.log('User is authenticated, redirecting to dashboard');
-      // Redirect to the appropriate dashboard based on user role
+      console.log('User is authenticated with profile, redirecting to dashboard');
       navigate(`/dashboard/${profile.role || 'patient'}`);
+    } else if (isAuthenticated) {
+      console.log('User is authenticated but no profile, waiting for profile data');
+      setTimeout(() => {
+        if (profile) {
+          navigate(`/dashboard/${profile.role || 'patient'}`);
+        } else {
+          console.log('No profile after waiting, redirecting to registration');
+          navigate('/auth/register');
+        }
+      }, 500);
     } else {
       console.log('User is not authenticated, redirecting to registration');
       navigate('/auth/register');
     }
   };
 
+  useEffect(() => {
+    if (!loading && isAuthenticated && profile) {
+      console.log('Auto-redirecting authenticated user to dashboard');
+      navigate(`/dashboard/${profile.role || 'patient'}`);
+    }
+  }, [isAuthenticated, profile, loading, navigate]);
+
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
       
       <main className="flex-grow">
-        {/* Hero Section */}
         <section className="py-20 md:py-28 px-4">
           <div className="container mx-auto">
             <div className="max-w-3xl mx-auto text-center">
@@ -58,7 +82,6 @@ const Index = () => {
           </div>
         </section>
         
-        {/* Features Section */}
         <section className="py-20 px-4 bg-muted/50">
           <div className="container mx-auto">
             <h2 className="text-3xl md:text-4xl font-bold text-center mb-12">
@@ -82,7 +105,6 @@ const Index = () => {
           </div>
         </section>
         
-        {/* CTA Section */}
         <section className="py-20 px-4">
           <div className="container mx-auto">
             <div className="bg-primary/5 border border-primary/20 rounded-2xl p-8 md:p-12 text-center">
@@ -109,7 +131,6 @@ const Index = () => {
   );
 };
 
-// Features data
 const features = [
   {
     title: "24/7 Doctor Availability",

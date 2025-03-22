@@ -1,6 +1,6 @@
 
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { Lock, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,11 +11,16 @@ import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 
 const Login = () => {
-  const { signIn, profile } = useAuth();
-  const navigate = useNavigate();
+  const { signIn, loading: authLoading, isAuthenticated, profile } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  // If user is already authenticated, redirect to dashboard
+  if (!authLoading && isAuthenticated && profile) {
+    console.log('User already authenticated, redirecting from login page');
+    return <Navigate to={`/dashboard/${profile.role || 'patient'}`} replace />;
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,10 +34,8 @@ const Login = () => {
     
     try {
       await signIn(email, password);
-      console.log('Login successful, redirecting...');
-      
+      console.log('Login successful, redirecting will be handled by AuthContext');
       // Redirect will be handled by AuthContext onAuthStateChange
-      // This is left empty intentionally as navigation will happen automatically
     } catch (error) {
       console.error('Login error:', error);
       // Error is already handled in the AuthContext
@@ -101,7 +104,7 @@ const Login = () => {
               <Button 
                 type="submit" 
                 className="w-full rounded-full" 
-                disabled={isLoading}
+                disabled={isLoading || authLoading}
               >
                 {isLoading ? 'Signing in...' : 'Sign In'}
               </Button>
