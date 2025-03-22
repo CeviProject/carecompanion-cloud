@@ -22,12 +22,26 @@ serve(async (req) => {
     
     if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
       console.error('Google credentials not configured');
+      console.error(`GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID ? 'Set' : 'Not set'}`);
+      console.error(`GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET ? 'Set' : 'Not set'}`);
       throw new Error('Google Calendar API credentials are not configured. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in the environment variables.');
     }
 
     // Parse the request body to get the action
-    const { action, ...data } = await req.json();
-    console.log(`Processing action: ${action}`, JSON.stringify(data, null, 2));
+    let data;
+    let action;
+    
+    try {
+      const requestData = await req.json();
+      console.log('Request data:', JSON.stringify(requestData, null, 2));
+      action = requestData.action;
+      data = requestData;
+    } catch (e) {
+      console.error('Error parsing request data:', e);
+      throw new Error('Invalid request data');
+    }
+    
+    console.log(`Processing action: ${action}`);
 
     // Generate OAuth URL for user authorization
     if (action === 'authorize') {
@@ -44,6 +58,8 @@ serve(async (req) => {
       authUrl.searchParams.append('access_type', 'offline');
       authUrl.searchParams.append('prompt', 'consent');
       authUrl.searchParams.append('state', 'google_calendar_auth');
+      
+      console.log('Generated auth URL:', authUrl.toString());
       
       return new Response(JSON.stringify({ 
         authUrl: authUrl.toString() 
@@ -177,6 +193,16 @@ serve(async (req) => {
       
       // Create the event in Google Calendar
       console.log('Sending request to Google Calendar API');
+      console.log('Request details:', JSON.stringify({
+        url: 'https://www.googleapis.com/calendar/v3/calendars/primary/events',
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: calendarEvent
+      }, null, 2));
+      
       const response = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
         method: 'POST',
         headers: {

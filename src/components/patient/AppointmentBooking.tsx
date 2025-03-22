@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -516,7 +515,12 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
     accessToken: string;
   }) => {
     try {
-      console.log('Invoking Google Calendar edge function to create event');
+      console.log('Invoking Google Calendar edge function to create event', {
+        summary: event.summary,
+        startTime: event.startTime,
+        endTime: event.endTime
+      });
+      
       const response = await supabase.functions.invoke('google-calendar-event', {
         body: { 
           event: {
