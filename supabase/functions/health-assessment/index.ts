@@ -17,21 +17,23 @@ serve(async (req) => {
   }
 
   try {
+    console.log('Health assessment function started');
+    
+    if (!GEMINI_API_KEY) {
+      console.error('GEMINI_API_KEY is not set in the environment variables');
+      throw new Error('GEMINI_API_KEY is not configured. Please set it in the Supabase dashboard under Settings > API > Edge Function Secrets.');
+    }
+    
     const { healthQuery, patientData } = await req.json();
     
-    // Log that the function is being called with the data
-    console.log('Health assessment function called:', { healthQuery, patientData });
+    console.log('Request data received:', { 
+      healthQuery: healthQuery ? 'Present' : 'Missing',
+      patientDataPresent: patientData ? 'Present' : 'Missing'
+    });
     
     if (!healthQuery || healthQuery.trim() === '') {
       throw new Error('Health query is required');
     }
-    
-    if (!GEMINI_API_KEY) {
-      console.error('GEMINI_API_KEY is not set in the environment variables');
-      throw new Error('GEMINI_API_KEY is not set in the environment variables');
-    }
-
-    console.log('Using GEMINI_API_KEY:', GEMINI_API_KEY ? 'Key is present (not showing for security)' : 'Missing');
 
     // Format patient data for the prompt
     const patientDetails = `
@@ -72,11 +74,14 @@ Please include:
 Format your response in a helpful, clear manner that is informative but not alarming. Use bullet points where appropriate.
 `;
 
-    // Log the full request being made to Gemini API
     console.log('Making request to Gemini API with prompt length:', prompt.length);
+    console.log('Using API URL:', GEMINI_API_URL);
 
     try {
-      const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+      const apiUrl = `${GEMINI_API_URL}?key=${GEMINI_API_KEY}`;
+      console.log('Full API URL (without key):', GEMINI_API_URL);
+      
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -114,17 +119,19 @@ Format your response in a helpful, clear manner that is informative but not alar
         }),
       });
 
+      console.log('Gemini API response status:', response.status);
+      
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('Gemini API error:', response.status, response.statusText, errorText);
+        console.error('Gemini API error details:', errorText);
         throw new Error(`Gemini API error: ${response.status} ${response.statusText} - ${errorText}`);
       }
 
       const data = await response.json();
-      console.log('Gemini API response received:', data ? 'Data received' : 'No data');
+      console.log('Gemini API response received successfully');
       
       if (!data.candidates || data.candidates.length === 0 || !data.candidates[0].content) {
-        console.error('Invalid response from Gemini API:', JSON.stringify(data));
+        console.error('Invalid response structure from Gemini API:', JSON.stringify(data));
         throw new Error('No content returned from Gemini API');
       }
       
@@ -150,7 +157,10 @@ Format your response in a helpful, clear manner that is informative but not alar
     }
   } catch (error) {
     console.error('Error in health-assessment function:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    return new Response(JSON.stringify({ 
+      error: error.message,
+      details: 'There was a problem processing your health query. Please try again later.'
+    }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

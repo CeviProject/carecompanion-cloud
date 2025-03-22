@@ -10,7 +10,7 @@ type AuthContextType = {
   user: User | null;
   profile: any | null;
   loading: boolean;
-  isAuthenticated: boolean; // Add a simple boolean flag for authentication status
+  isAuthenticated: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, userData: any) => Promise<void>;
   signOut: () => Promise<void>;
@@ -23,7 +23,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isAuthenticated, setIsAuthenticated] = useState(false); // Add authentication flag
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -97,6 +97,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
 
       toast.success('Login successful!');
+      // Let the onAuthStateChange handler navigate based on user role
     } catch (error: any) {
       toast.error(error.message || 'Failed to sign in');
       throw error;
@@ -126,11 +127,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signOut = async () => {
     try {
+      console.log('Signing out...');
       // First attempt the sign out
       const { error } = await supabase.auth.signOut();
+      
       if (error) {
+        console.error('Error during sign-out:', error);
         throw error;
       }
+      
+      console.log('Successfully signed out from Supabase');
       
       // Clear local state
       setSession(null);
@@ -139,6 +145,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setIsAuthenticated(false);
       
       // Navigate to home page
+      console.log('Navigating to home page');
       navigate('/', { replace: true });
       toast.success('Logged out successfully');
     } catch (error: any) {

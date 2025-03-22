@@ -29,7 +29,11 @@ const Login = () => {
     
     try {
       await signIn(email, password);
-      // After successful login, redirect based on user role
+      console.log('Login successful, redirecting...');
+      
+      // Navigate to the appropriate dashboard based on user role
+      // This will now be handled by the onAuthStateChange in AuthContext
+      // We'll just go to the home page and let the protected routes handle redirection
       navigate('/');
     } catch (error) {
       console.error('Login error:', error);

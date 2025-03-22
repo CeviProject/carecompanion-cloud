@@ -78,18 +78,20 @@ const HealthQueryForm = ({ onQuerySubmitted }: HealthQueryFormProps) => {
         }
       });
       
+      console.log('Edge function response:', { data: aiData ? 'Data received' : 'No data', error: aiError });
+      
       if (aiError) {
         console.error('Error from health-assessment function:', aiError);
         throw new Error(`AI assessment failed: ${aiError.message}`);
       }
       
-      console.log('Received response from health-assessment function:', aiData ? 'Data received' : 'No data');
-      
       if (!aiData) {
+        console.error('No data returned from health-assessment function');
         throw new Error('No data returned from the health assessment');
       }
       
       if (aiData.error) {
+        console.error('Error in AI response:', aiData.error);
         throw new Error(aiData.error);
       }
       

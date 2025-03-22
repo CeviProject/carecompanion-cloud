@@ -40,10 +40,12 @@ const ProtectedRoute = ({
   }
 
   if (!isAuthenticated) {
+    console.log('User not authenticated, redirecting to login');
     return <Navigate to="/auth/login" replace />;
   }
 
   if (requiredRole && profile?.role !== requiredRole) {
+    console.log(`User role (${profile?.role}) doesn't match required role (${requiredRole}), redirecting`);
     return <Navigate to={`/dashboard/${profile?.role || 'patient'}`} replace />;
   }
 
@@ -67,8 +69,11 @@ const PublicOnlyRoute = ({ children, redirectTo }: { children: React.ReactNode, 
   }
 
   if (isAuthenticated) {
+    console.log('User already authenticated, redirecting from public only route');
     const defaultRedirect = `/dashboard/${profile?.role || 'patient'}`;
-    return <Navigate to={redirectTo || defaultRedirect} replace />;
+    const targetPath = redirectTo || defaultRedirect;
+    console.log(`Redirecting to: ${targetPath}`);
+    return <Navigate to={targetPath} replace />;
   }
 
   return <>{children}</>;
