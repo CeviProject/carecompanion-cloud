@@ -91,13 +91,15 @@ serve(async (req) => {
         }),
       });
       
+      const responseText = await tokenResponse.text();
+      console.log('Token exchange response:', responseText);
+      
       if (!tokenResponse.ok) {
-        const errorData = await tokenResponse.text();
-        console.error('Token exchange error:', errorData);
-        throw new Error(`Failed to exchange authorization code: ${errorData}`);
+        console.error('Token exchange error:', responseText);
+        throw new Error(`Failed to exchange authorization code: ${responseText}`);
       }
       
-      const tokenData = await tokenResponse.json();
+      const tokenData = JSON.parse(responseText);
       console.log('Token exchange successful');
       
       // If userId is provided, store the tokens in the database
@@ -114,24 +116,73 @@ serve(async (req) => {
           } else {
             const supabase = createClient(supabaseUrl, supabaseServiceKey);
             
-            // Store tokens in the database
-            const { data: insertData, error: insertError } = await supabase
-              .from('user_integrations')
-              .upsert({
-                user_id: userId,
-                provider: 'google_calendar',
-                access_token: tokenData.access_token,
-                refresh_token: tokenData.refresh_token,
-                expires_at: new Date(Date.now() + (tokenData.expires_in * 1000)).toISOString(),
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-              }, { onConflict: 'user_id,provider' });
-            
-            if (insertError) {
-              console.error('Error storing tokens in database:', insertError);
-            } else {
-              dbSaveSuccess = true;
-              console.log('Tokens successfully stored in database for user:', userId);
+            try {
+              // First check if user_integrations table exists
+              const { data: tableExists, error: tableCheckError } = await supabase
+                .from('user_integrations')
+                .select('count(*)', { count: 'exact', head: true });
+              
+              if (tableCheckError) {
+                // Table probably doesn't exist, create it
+                console.log('Creating user_integrations table');
+                
+                const { error: createError } = await supabase.rpc('create_user_integrations_table');
+                
+                if (createError) {
+                  console.error('Error creating table:', createError);
+                  
+                  // Try direct SQL as fallback
+                  const { error: sqlError } = await supabase.rpc('execute_sql', {
+                    sql: `
+                      CREATE TABLE IF NOT EXISTS public.user_integrations (
+                        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        user_id UUID NOT NULL,
+                        provider TEXT NOT NULL,
+                        access_token TEXT NOT NULL,
+                        refresh_token TEXT,
+                        expires_at TIMESTAMPTZ,
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                        updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                        UNIQUE(user_id, provider)
+                      );
+                      ALTER TABLE public.user_integrations ENABLE ROW LEVEL SECURITY;
+                      CREATE POLICY "Users can view their own integrations" ON public.user_integrations
+                        FOR SELECT USING (auth.uid() = user_id);
+                      CREATE POLICY "Users can insert their own integrations" ON public.user_integrations
+                        FOR INSERT WITH CHECK (auth.uid() = user_id);
+                      CREATE POLICY "Users can update their own integrations" ON public.user_integrations
+                        FOR UPDATE USING (auth.uid() = user_id);
+                    `
+                  });
+                  
+                  if (sqlError) {
+                    console.error('Error executing SQL to create table:', sqlError);
+                  }
+                }
+              }
+              
+              // Now try to store tokens
+              console.log('Storing tokens in database for user:', userId);
+              const { data: insertData, error: insertError } = await supabase
+                .from('user_integrations')
+                .upsert({
+                  user_id: userId,
+                  provider: 'google_calendar',
+                  access_token: tokenData.access_token,
+                  refresh_token: tokenData.refresh_token,
+                  expires_at: new Date(Date.now() + (tokenData.expires_in * 1000)).toISOString(),
+                  created_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString()
+                }, { onConflict: 'user_id,provider' });
+              
+              if (insertError) {
+                console.error('Error storing tokens in database:', insertError);
+              } else {
+                dbSaveSuccess = true;
+                console.log('Tokens successfully stored in database for user:', userId);
+              }
+            } catch (innerError) {
+              console.error('Error in database operations:', innerError);
             }
           }
         } catch (dbError) {
@@ -171,13 +222,15 @@ serve(async (req) => {
         }),
       });
       
+      const responseText = await tokenResponse.text();
+      console.log('Token refresh response:', responseText);
+      
       if (!tokenResponse.ok) {
-        const errorData = await tokenResponse.text();
-        console.error('Token refresh error:', errorData);
-        throw new Error(`Failed to refresh token: ${errorData}`);
+        console.error('Token refresh error:', responseText);
+        throw new Error(`Failed to refresh token: ${responseText}`);
       }
       
-      const tokenData = await tokenResponse.json();
+      const tokenData = JSON.parse(responseText);
       console.log('Token refresh successful');
       
       // If userId is provided, update the tokens in the database
@@ -245,83 +298,172 @@ serve(async (req) => {
         
         const supabase = createClient(supabaseUrl, supabaseServiceKey);
         
-        // Get tokens from the database
-        const { data: integrationData, error: integrationError } = await supabase
-          .from('user_integrations')
-          .select('*')
-          .match({ user_id: userId, provider: 'google_calendar' })
-          .single();
-        
-        if (integrationError) {
-          console.error('Error fetching tokens from database:', integrationError);
-          throw new Error('No Google Calendar integration found for this user');
-        }
-        
-        console.log('Tokens fetched from database for user:', userId);
-        
-        // Check if tokens are expired
-        const expiresAt = new Date(integrationData.expires_at).getTime();
-        const now = Date.now();
-        
-        if (now >= expiresAt) {
-          console.log('Access token expired, refreshing...');
+        // Check if the user_integrations table exists
+        try {
+          // Get tokens from the database
+          const { data: integrationData, error: integrationError } = await supabase
+            .from('user_integrations')
+            .select('*')
+            .match({ user_id: userId, provider: 'google_calendar' })
+            .single();
           
-          // Refresh token
-          const refreshResponse = await fetch('https://oauth2.googleapis.com/token', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: new URLSearchParams({
-              refresh_token: integrationData.refresh_token,
-              client_id: GOOGLE_CLIENT_ID,
-              client_secret: GOOGLE_CLIENT_SECRET,
-              grant_type: 'refresh_token',
-            }),
-          });
-          
-          if (!refreshResponse.ok) {
-            const errorData = await refreshResponse.text();
-            console.error('Token refresh error:', errorData);
-            throw new Error(`Failed to refresh token: ${errorData}`);
+          if (integrationError) {
+            console.error('Error fetching tokens from database:', integrationError);
+            // Return empty tokens if not found
+            return new Response(JSON.stringify({
+              message: 'No Google Calendar integration found for this user',
+              found: false
+            }), {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
           }
           
-          const refreshData = await refreshResponse.json();
-          console.log('Token refresh successful');
+          console.log('Tokens fetched from database for user:', userId);
           
-          // Update tokens in the database
-          const { error: updateError } = await supabase
-            .from('user_integrations')
-            .update({
+          // Check if tokens are expired
+          const expiresAt = new Date(integrationData.expires_at).getTime();
+          const now = Date.now();
+          
+          if (now >= expiresAt) {
+            console.log('Access token expired, refreshing...');
+            
+            // Refresh token
+            const refreshResponse = await fetch('https://oauth2.googleapis.com/token', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+              },
+              body: new URLSearchParams({
+                refresh_token: integrationData.refresh_token,
+                client_id: GOOGLE_CLIENT_ID,
+                client_secret: GOOGLE_CLIENT_SECRET,
+                grant_type: 'refresh_token',
+              }),
+            });
+            
+            const refreshResponseText = await refreshResponse.text();
+            console.log('Token refresh response:', refreshResponseText);
+            
+            if (!refreshResponse.ok) {
+              console.error('Token refresh error:', refreshResponseText);
+              throw new Error(`Failed to refresh token: ${refreshResponseText}`);
+            }
+            
+            const refreshData = JSON.parse(refreshResponseText);
+            console.log('Token refresh successful');
+            
+            // Update tokens in the database
+            const { error: updateError } = await supabase
+              .from('user_integrations')
+              .update({
+                access_token: refreshData.access_token,
+                expires_at: new Date(Date.now() + (refreshData.expires_in * 1000)).toISOString(),
+                updated_at: new Date().toISOString()
+              })
+              .match({ user_id: userId, provider: 'google_calendar' });
+            
+            if (updateError) {
+              console.error('Error updating tokens in database:', updateError);
+            }
+            
+            return new Response(JSON.stringify({
               access_token: refreshData.access_token,
-              expires_at: new Date(Date.now() + (refreshData.expires_in * 1000)).toISOString(),
-              updated_at: new Date().toISOString()
-            })
-            .match({ user_id: userId, provider: 'google_calendar' });
-          
-          if (updateError) {
-            console.error('Error updating tokens in database:', updateError);
+              refresh_token: integrationData.refresh_token,
+              expires_in: refreshData.expires_in,
+              found: true
+            }), {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
           }
           
           return new Response(JSON.stringify({
-            access_token: refreshData.access_token,
+            access_token: integrationData.access_token,
             refresh_token: integrationData.refresh_token,
-            expires_in: refreshData.expires_in
+            expires_in: Math.floor((expiresAt - now) / 1000),
+            found: true
+          }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        } catch (tableError) {
+          console.error('Error with user_integrations table:', tableError);
+          return new Response(JSON.stringify({
+            message: 'User integrations table not available',
+            found: false
           }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
         }
+      } catch (error) {
+        console.error('Error getting tokens from database:', error);
+        throw new Error(`Failed to get tokens: ${error.message}`);
+      }
+    }
+    
+    // Revoke access and remove tokens
+    if (action === 'revoke') {
+      const { userId } = data;
+      
+      if (!userId) {
+        throw new Error('User ID is required');
+      }
+      
+      try {
+        // Create a Supabase client for the edge function
+        const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2");
+        const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+        const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+        
+        if (!supabaseUrl || !supabaseServiceKey) {
+          throw new Error('Supabase credentials not configured for database access');
+        }
+        
+        const supabase = createClient(supabaseUrl, supabaseServiceKey);
+        
+        // Get the current tokens to revoke them with Google
+        const { data: currentTokens, error: getError } = await supabase
+          .from('user_integrations')
+          .select('access_token, refresh_token')
+          .match({ user_id: userId, provider: 'google_calendar' })
+          .single();
+        
+        if (!getError && currentTokens?.access_token) {
+          // Revoke the token with Google
+          try {
+            await fetch(`https://oauth2.googleapis.com/revoke?token=${currentTokens.access_token}`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+              }
+            });
+            console.log('Token revoked with Google');
+          } catch (revokeError) {
+            console.error('Error revoking token with Google:', revokeError);
+            // Continue anyway to remove from database
+          }
+        }
+        
+        // Delete tokens from database
+        const { error: deleteError } = await supabase
+          .from('user_integrations')
+          .delete()
+          .match({ user_id: userId, provider: 'google_calendar' });
+        
+        if (deleteError) {
+          console.error('Error deleting tokens from database:', deleteError);
+          throw new Error(`Failed to delete tokens: ${deleteError.message}`);
+        }
+        
+        console.log('Tokens successfully deleted from database for user:', userId);
         
         return new Response(JSON.stringify({
-          access_token: integrationData.access_token,
-          refresh_token: integrationData.refresh_token,
-          expires_in: Math.floor((expiresAt - now) / 1000)
+          success: true,
+          message: 'Google Calendar integration removed successfully'
         }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       } catch (error) {
-        console.error('Error getting tokens from database:', error);
-        throw new Error(`Failed to get tokens: ${error.message}`);
+        console.error('Error revoking tokens:', error);
+        throw new Error(`Failed to revoke tokens: ${error.message}`);
       }
     }
     
@@ -395,7 +537,7 @@ serve(async (req) => {
         
         if (!response.ok) {
           console.error('Google Calendar API error:', responseText);
-          throw new Error(`Google Calendar API error: ${responseText}`);
+          throw new Error(`Google Calendar API error (${response.status}): ${responseText}`);
         }
         
         const responseData = JSON.parse(responseText);
@@ -416,7 +558,7 @@ serve(async (req) => {
     
     // If no valid action is matched
     console.error('Invalid action specified:', action);
-    throw new Error('Invalid action specified. Valid actions are: authorize, token, refresh, get_tokens, create');
+    throw new Error('Invalid action specified. Valid actions are: authorize, token, refresh, get_tokens, revoke, create');
     
   } catch (error) {
     console.error('Error in google-calendar-event function:', error.message);

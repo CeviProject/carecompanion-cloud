@@ -38,6 +38,7 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
       try {
         const storedTokens = JSON.parse(tokensStr);
         setTokens(storedTokens);
+        console.log('Initialized tokens from localStorage:', storedTokens);
       } catch (e) {
         console.error('Error parsing Google Calendar tokens:', e);
       }
@@ -53,6 +54,7 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
     if (!user) return;
     
     try {
+      console.log('Fetching tokens from database for user:', user.id);
       const { data, error } = await supabase.functions.invoke('google-calendar-event', {
         body: { 
           action: 'get_tokens',
@@ -65,7 +67,9 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
         return;
       }
       
-      if (data.access_token) {
+      console.log('Tokens response from database:', data);
+      
+      if (data && data.access_token) {
         const newTokens = {
           access_token: data.access_token,
           refresh_token: data.refresh_token,
@@ -73,6 +77,7 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
           expires_at: Date.now() + (data.expires_in * 1000)
         };
         
+        console.log('Setting tokens from database:', newTokens);
         setTokens(newTokens);
         setIsEnabled(true);
         
@@ -87,6 +92,7 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
 
   const authorizeGoogleCalendar = async () => {
     try {
+      console.log('Starting Google Calendar authorization process');
       // Get the authorization URL
       const { data, error } = await supabase.functions.invoke('google-calendar-event', {
         body: { action: 'authorize' }
@@ -97,6 +103,8 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
         toast.error('Failed to connect to Google Calendar');
         return;
       }
+      
+      console.log('Received authorization URL:', data?.authUrl);
       
       // Open the authorization URL in a new window
       const authWindow = window.open(data.authUrl, 'googleAuthWindow', 'width=500,height=600');
@@ -109,6 +117,7 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
         // Check if this is the auth callback message
         if (event.data && event.data.type === 'google_auth_callback' && event.data.code) {
           const authCode = event.data.code;
+          console.log('Received auth code from callback:', authCode);
           
           // Exchange the code for tokens
           const { data: tokenData, error: tokenError } = await supabase.functions.invoke('google-calendar-event', {
@@ -125,6 +134,8 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
             return;
           }
           
+          console.log('Received token data:', tokenData);
+          
           // Save the tokens
           const newTokens = {
             access_token: tokenData.access_token,
@@ -133,6 +144,7 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
             expires_at: Date.now() + (tokenData.expires_in * 1000)
           };
           
+          console.log('Saving new tokens:', newTokens);
           setTokens(newTokens);
           setIsEnabled(true);
           
@@ -176,19 +188,35 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
     
     // If user is logged in, we could also delete from database
     if (user) {
-      // Note: This requires an additional edge function endpoint to remove tokens
-      // from the database, which is not implemented in this example
+      // Delete tokens from database
+      supabase.functions.invoke('google-calendar-event', {
+        body: { 
+          action: 'revoke',
+          userId: user.id
+        }
+      }).then(({ error }) => {
+        if (error) {
+          console.error('Error revoking tokens in database:', error);
+        } else {
+          console.log('Successfully revoked tokens in database');
+        }
+      });
     }
     
     toast.info('Disconnected from Google Calendar');
   };
 
   const getAccessToken = async (): Promise<string | null> => {
+    console.log('Getting access token, current tokens:', tokens);
+    
     // First check if we have valid tokens
     if (tokens) {
       if (tokens.expires_at > Date.now()) {
+        console.log('Using existing valid access token');
         return tokens.access_token;
       }
+      
+      console.log('Token expired, attempting to refresh');
       
       // Tokens expired, try to refresh
       if (tokens.refresh_token) {
@@ -203,6 +231,8 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
           
           if (error) throw error;
           
+          console.log('Refresh token response:', data);
+          
           if (data.access_token) {
             const newTokens = {
               ...tokens,
@@ -211,6 +241,7 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
               expires_at: Date.now() + (data.expires_in * 1000)
             };
             
+            console.log('Setting refreshed tokens:', newTokens);
             setTokens(newTokens);
             
             // Update localStorage
@@ -228,6 +259,7 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
     
     // If we don't have tokens locally but user is logged in, try to fetch from database
     if (user && !tokens) {
+      console.log('No local tokens, trying to fetch from database');
       try {
         const { data, error } = await supabase.functions.invoke('google-calendar-event', {
           body: { 
@@ -238,6 +270,8 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
         
         if (error) throw error;
         
+        console.log('Database tokens response:', data);
+        
         if (data.access_token) {
           const newTokens = {
             access_token: data.access_token,
@@ -246,6 +280,7 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
             expires_at: Date.now() + (data.expires_in * 1000)
           };
           
+          console.log('Setting tokens from database:', newTokens);
           setTokens(newTokens);
           setIsEnabled(true);
           
@@ -260,6 +295,7 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
       }
     }
     
+    console.log('No valid tokens found');
     return null;
   };
 
