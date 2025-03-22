@@ -3,12 +3,15 @@ import { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Pill, Calendar, Clock, User, History } from 'lucide-react';
+import { Pill, Calendar, Clock, User, History, Bell, Sparkles } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import HealthQueryForm from '@/components/patient/HealthQueryForm';
 import HealthAssessment from '@/components/patient/HealthAssessment';
 import DoctorRecommendations from '@/components/patient/DoctorRecommendations';
+import AppointmentBooking from '@/components/patient/AppointmentBooking';
+import MedicationReminders from '@/components/patient/MedicationReminders';
+import HealthTips from '@/components/patient/HealthTips';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 
@@ -17,16 +20,19 @@ const PatientDashboard = () => {
   const [activeTab, setActiveTab] = useState('overview');
   const [pastQueries, setPastQueries] = useState<any[]>([]);
   const [appointments, setAppointments] = useState<any[]>([]);
+  const [medications, setMedications] = useState<any[]>([]);
   const [currentAssessment, setCurrentAssessment] = useState<string | null>(null);
   const [suggestedSpecialties, setSuggestedSpecialties] = useState<string[] | null>(null);
   const [recommendedHospitals, setRecommendedHospitals] = useState<any[] | null>(null);
   const [loadingQueries, setLoadingQueries] = useState(true);
   const [loadingAppointments, setLoadingAppointments] = useState(true);
+  const [loadingMedications, setLoadingMedications] = useState(true);
 
   useEffect(() => {
     if (user) {
       fetchPastQueries();
       fetchAppointments();
+      fetchMedications();
     }
   }, [user]);
 
@@ -73,6 +79,24 @@ const PatientDashboard = () => {
     }
   };
 
+  const fetchMedications = async () => {
+    setLoadingMedications(true);
+    try {
+      const { data, error } = await supabase
+        .from('medications')
+        .select('*')
+        .eq('user_id', user?.id)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      setMedications(data || []);
+    } catch (error) {
+      console.error('Error fetching medications:', error);
+    } finally {
+      setLoadingMedications(false);
+    }
+  };
+
   const handleQuerySubmitted = (queryData: any) => {
     // Update the UI with the new query
     setPastQueries([queryData, ...pastQueries]);
@@ -101,7 +125,11 @@ const PatientDashboard = () => {
                 Welcome back, {profile?.first_name || 'Patient'}
               </p>
             </div>
-            <div className="mt-4 md:mt-0">
+            <div className="mt-4 md:mt-0 flex space-x-2">
+              <Button className="rounded-full" variant="outline" onClick={() => setActiveTab('appointments')}>
+                <Calendar className="h-4 w-4 mr-2" />
+                Book Appointment
+              </Button>
               <Button className="rounded-full" asChild>
                 <a href="#health-query">New Health Query</a>
               </Button>
@@ -118,6 +146,12 @@ const PatientDashboard = () => {
               </TabsTrigger>
               <TabsTrigger value="appointments" className="rounded-full">
                 Appointments
+              </TabsTrigger>
+              <TabsTrigger value="medications" className="rounded-full">
+                Medications
+              </TabsTrigger>
+              <TabsTrigger value="tips" className="rounded-full">
+                Health Tips
               </TabsTrigger>
               <TabsTrigger value="history" className="rounded-full">
                 History
@@ -183,32 +217,63 @@ const PatientDashboard = () => {
                       </Button>
                     </>
                   ) : (
-                    <p className="text-muted-foreground">No upcoming appointments</p>
+                    <div>
+                      <p className="text-muted-foreground mb-4">No upcoming appointments</p>
+                      <Button 
+                        size="sm" 
+                        className="w-full rounded-full"
+                        onClick={() => setActiveTab('appointments')}
+                      >
+                        Book Appointment
+                      </Button>
+                    </div>
                   )}
                 </Card>
                 
                 <Card className="glass-card p-6">
                   <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-xl font-semibold">Health Tips</h2>
-                    <User className="h-5 w-5 text-primary" />
+                    <h2 className="text-xl font-semibold">Medication Reminder</h2>
+                    <Bell className="h-5 w-5 text-primary" />
                   </div>
                   
-                  <div className="space-y-4">
+                  {loadingMedications ? (
+                    <p className="text-muted-foreground">Loading...</p>
+                  ) : medications && medications.length > 0 ? (
+                    <>
+                      <p className="font-medium">{medications[0].name}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {medications[0].dosage} - {medications[0].time}
+                      </p>
+                      {medications.length > 1 && (
+                        <p className="text-xs mt-2 text-muted-foreground">
+                          +{medications.length - 1} more medications
+                        </p>
+                      )}
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="mt-4 w-full rounded-full"
+                        onClick={() => setActiveTab('medications')}
+                      >
+                        Manage Medications
+                      </Button>
+                    </>
+                  ) : (
                     <div>
-                      <h3 className="font-medium text-sm">Stay Hydrated</h3>
-                      <p className="text-xs text-muted-foreground">Drink at least 8 glasses of water daily.</p>
+                      <p className="text-muted-foreground mb-4">No medication reminders</p>
+                      <Button 
+                        size="sm" 
+                        className="w-full rounded-full"
+                        onClick={() => setActiveTab('medications')}
+                      >
+                        Add Medication
+                      </Button>
                     </div>
-                    <div>
-                      <h3 className="font-medium text-sm">Regular Exercise</h3>
-                      <p className="text-xs text-muted-foreground">Aim for 30 minutes of moderate activity daily.</p>
-                    </div>
-                    <div>
-                      <h3 className="font-medium text-sm">Balanced Diet</h3>
-                      <p className="text-xs text-muted-foreground">Include fruits, vegetables, whole grains, and lean proteins.</p>
-                    </div>
-                  </div>
+                  )}
                 </Card>
               </div>
+              
+              <HealthTips />
               
               <div id="health-query">
                 <HealthQueryForm onQuerySubmitted={handleQuerySubmitted} />
@@ -234,6 +299,8 @@ const PatientDashboard = () => {
             </TabsContent>
             
             <TabsContent value="appointments" className="space-y-6">
+              <AppointmentBooking onAppointmentCreated={fetchAppointments} />
+              
               <Card className="glass-card p-6">
                 <h2 className="text-xl font-semibold mb-4">Your Appointments</h2>
                 
@@ -244,7 +311,6 @@ const PatientDashboard = () => {
                 ) : appointments.length === 0 ? (
                   <div className="py-8 text-center">
                     <p className="text-muted-foreground mb-4">No appointments scheduled</p>
-                    <Button className="rounded-full">Schedule an Appointment</Button>
                   </div>
                 ) : (
                   <div className="space-y-4">
@@ -274,6 +340,14 @@ const PatientDashboard = () => {
                   </div>
                 )}
               </Card>
+            </TabsContent>
+            
+            <TabsContent value="medications" className="space-y-6">
+              <MedicationReminders />
+            </TabsContent>
+            
+            <TabsContent value="tips" className="space-y-6">
+              <HealthTips />
             </TabsContent>
             
             <TabsContent value="history" className="space-y-6">
