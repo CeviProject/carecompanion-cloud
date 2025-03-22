@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
@@ -559,9 +558,124 @@ serve(async (req) => {
       }
     }
     
+    // Sync all medications to Google Calendar
+    if (action === 'sync_all_medications') {
+      const { userId, accessToken, medications } = data;
+      
+      if (!userId) {
+        throw new Error('User ID is required');
+      }
+      
+      if (!accessToken) {
+        throw new Error('No access token provided. User must authorize Google Calendar access');
+      }
+      
+      if (!medications || !Array.isArray(medications) || medications.length === 0) {
+        throw new Error('No medications provided to sync');
+      }
+      
+      console.log(`Syncing ${medications.length} medications to Google Calendar for user: ${userId}`);
+      
+      const results = {
+        successful: 0,
+        failed: 0,
+        details: []
+      };
+      
+      for (const med of medications) {
+        try {
+          // Handle recurring events
+          let recurrence = null;
+          if (med.frequency) {
+            recurrence = createRecurrenceRule(med.frequency, med.end_date);
+          }
+          
+          const calendarEvent = {
+            summary: `Take ${med.name} ${med.dosage}`,
+            description: med.notes || `Remember to take your ${med.name}. Dosage: ${med.dosage}`,
+            start: {
+              dateTime: new Date(new Date(med.start_date).setHours(
+                parseInt(med.time.split(':')[0]), 
+                parseInt(med.time.split(':')[1]), 
+                0, 0
+              )).toISOString(),
+              timeZone: 'UTC',
+            },
+            end: {
+              dateTime: new Date(new Date(med.start_date).setHours(
+                parseInt(med.time.split(':')[0]), 
+                parseInt(med.time.split(':')[1]) + 15, 
+                0, 0
+              )).toISOString(),
+              timeZone: 'UTC',
+            },
+            reminders: {
+              useDefault: false,
+              overrides: [
+                { method: 'email', minutes: 24 * 60 }, // 1 day before
+                { method: 'popup', minutes: 30 } // 30 minutes before
+              ],
+            },
+            // Add recurrence rule if this is a recurring event
+            ...(recurrence && { recurrence: [recurrence] })
+          };
+          
+          // Create the event in Google Calendar
+          const response = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(calendarEvent),
+          });
+          
+          const responseText = await response.text();
+          
+          if (!response.ok) {
+            console.error(`Error syncing medication ${med.id}: ${responseText}`);
+            results.failed++;
+            results.details.push({
+              id: med.id,
+              name: med.name,
+              success: false,
+              error: responseText
+            });
+          } else {
+            const responseData = JSON.parse(responseText);
+            console.log(`Successfully synced medication ${med.id} to event ${responseData.id}`);
+            results.successful++;
+            results.details.push({
+              id: med.id,
+              name: med.name,
+              success: true,
+              eventId: responseData.id,
+              htmlLink: responseData.htmlLink
+            });
+          }
+        } catch (error: any) {
+          console.error(`Error processing medication ${med.id}:`, error);
+          results.failed++;
+          results.details.push({
+            id: med.id,
+            name: med.name,
+            success: false,
+            error: error.message
+          });
+        }
+      }
+      
+      return new Response(JSON.stringify({
+        success: results.failed === 0,
+        results
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    
     // If no valid action is matched
     console.error('Invalid action specified:', action);
-    throw new Error('Invalid action specified. Valid actions are: authorize, token, refresh, get_tokens, revoke, create');
+    throw new Error('Invalid action specified. Valid actions are: authorize, token, refresh, get_tokens, revoke, create, sync_all_medications');
     
   } catch (error) {
     console.error('Error in google-calendar-event function:', error.message);
@@ -607,7 +721,7 @@ function createRecurrenceRule(frequency: string, endDate: string | null): string
   
   // Add end date if provided
   if (endDate) {
-    const formattedDate = endDate.split('T')[0].replace(/-/g, '');
+    const formattedDate = endDate.toString().split('T')[0].replace(/-/g, '');
     rule += `;UNTIL=${formattedDate}T235959Z`;
   }
   

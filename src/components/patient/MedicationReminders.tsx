@@ -8,11 +8,12 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
-import { PlusCircle, Calendar as CalendarIcon, Clock, Pill, AlertTriangle, Check, Trash2 } from "lucide-react";
+import { PlusCircle, Calendar as CalendarIcon, Clock, Pill, Trash2, Check, Sync } from "lucide-react";
 import { format, addDays, isToday } from 'date-fns';
 import { cn } from "@/lib/utils";
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
+import { useGoogleCalendar } from '@/context/GoogleCalendarContext';
 import { toast } from 'sonner';
 
 // Define TypeScript interface for medication
@@ -29,14 +30,6 @@ interface Medication {
   created_at: string;
 }
 
-// Define TypeScript interface for Google Calendar tokens
-interface GoogleCalendarTokens {
-  access_token: string;
-  refresh_token: string;
-  expires_in: number;
-  expires_at?: number;
-}
-
 const FREQUENCY_OPTIONS = [
   { value: 'daily', label: 'Daily' },
   { value: 'twice_daily', label: 'Twice Daily' },
@@ -47,9 +40,11 @@ const FREQUENCY_OPTIONS = [
 
 const MedicationReminders = () => {
   const { user } = useAuth();
+  const { isEnabled: isGoogleCalendarEnabled, getAccessToken, authorizeGoogleCalendar } = useGoogleCalendar();
   const [medications, setMedications] = useState<Medication[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isSyncingCalendar, setIsSyncingCalendar] = useState(false);
   const [newMedication, setNewMedication] = useState({
     name: '',
     dosage: '',
@@ -62,12 +57,10 @@ const MedicationReminders = () => {
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [isEndDateCalendarOpen, setIsEndDateCalendarOpen] = useState(false);
   const [todaysMedications, setTodaysMedications] = useState<Medication[]>([]);
-  const [isGoogleCalendarEnabled, setIsGoogleCalendarEnabled] = useState(false);
 
   useEffect(() => {
     if (user) {
       fetchMedications();
-      checkGoogleCalendarIntegration();
       
       // Set up real-time subscription for medications
       const channel = supabase
@@ -141,52 +134,6 @@ const MedicationReminders = () => {
       toast.error(`Failed to load medications: ${error.message}`);
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const checkGoogleCalendarIntegration = async () => {
-    try {
-      // First check localStorage
-      const localIntegration = localStorage.getItem('googleCalendarEnabled');
-      
-      if (localIntegration === 'true') {
-        setIsGoogleCalendarEnabled(true);
-      }
-      
-      // If we have a user, check the database for integration
-      if (user) {
-        try {
-          const { data, error } = await supabase.functions.invoke('google-calendar-event', {
-            body: { 
-              action: 'get_tokens',
-              userId: user.id
-            }
-          });
-          
-          if (!error && data.access_token) {
-            setIsGoogleCalendarEnabled(true);
-            
-            // Update localStorage with the latest tokens
-            const tokensWithExpiry = {
-              access_token: data.access_token,
-              refresh_token: data.refresh_token,
-              expires_in: data.expires_in,
-              expires_at: Date.now() + (data.expires_in * 1000)
-            };
-            
-            localStorage.setItem('googleCalendarTokens', JSON.stringify(tokensWithExpiry));
-            localStorage.setItem('googleCalendarEnabled', 'true');
-          }
-        } catch (err) {
-          console.error('Error checking Google Calendar integration:', err);
-          // If there's an error retrieving from DB but we have localStorage tokens, still enable
-          if (localIntegration === 'true') {
-            setIsGoogleCalendarEnabled(true);
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Error checking Google Calendar integration:', error);
     }
   };
 
@@ -287,19 +234,7 @@ const MedicationReminders = () => {
 
       if (error) throw error;
 
-      // Add to Google Calendar if integration is enabled
-      if (isGoogleCalendarEnabled) {
-        try {
-          await addToGoogleCalendar(data as Medication);
-          toast.success('Medication saved and added to Google Calendar');
-        } catch (calendarError: any) {
-          console.error('Failed to add to Google Calendar:', calendarError);
-          // Don't stop the flow, just notify the user
-          toast.error('Medication saved but could not add to Google Calendar');
-        }
-      } else {
-        toast.success('Medication saved successfully');
-      }
+      toast.success('Medication saved successfully');
       
       // Reset form and close dialog
       resetForm();
@@ -324,180 +259,77 @@ const MedicationReminders = () => {
     }
   };
 
-  const addToGoogleCalendar = async (medication: Medication) => {
+  const syncWithGoogleCalendar = async () => {
+    if (!isGoogleCalendarEnabled) {
+      toast.info('Google Calendar is not connected');
+      authorizeGoogleCalendar();
+      return;
+    }
+
+    if (medications.length === 0) {
+      toast.info('No medications to sync with Google Calendar');
+      return;
+    }
+
     try {
-      if (!isGoogleCalendarEnabled) {
-        console.log('Google Calendar integration is not enabled, skipping');
-        return null;
-      }
-      
-      // Get tokens - try both sources
-      let tokens: GoogleCalendarTokens | null = null;
-      
-      // First try to get tokens from localStorage
-      const tokensStr = localStorage.getItem('googleCalendarTokens');
-      if (tokensStr) {
-        try {
-          const storedTokens = JSON.parse(tokensStr);
-          
-          // Check if tokens are expired
-          if (storedTokens.expires_at && Date.now() < storedTokens.expires_at) {
-            tokens = storedTokens;
-            console.log('Using tokens from localStorage');
-          } else if (storedTokens.refresh_token) {
-            // Tokens are expired, try to refresh
-            const { data: refreshData } = await supabase.functions.invoke('google-calendar-event', {
-              body: { 
-                action: 'refresh',
-                refresh_token: storedTokens.refresh_token,
-                userId: user?.id
-              }
-            });
-            
-            if (refreshData.access_token) {
-              tokens = {
-                access_token: refreshData.access_token,
-                refresh_token: storedTokens.refresh_token,
-                expires_in: refreshData.expires_in,
-                expires_at: Date.now() + (refreshData.expires_in * 1000)
-              };
-              
-              // Update localStorage
-              localStorage.setItem('googleCalendarTokens', JSON.stringify(tokens));
-              console.log('Refreshed tokens in localStorage');
-            }
-          }
-        } catch (e) {
-          console.error('Error parsing localStorage tokens:', e);
-        }
-      }
-      
-      // If no valid tokens from localStorage and we have a user, try DB
-      if (!tokens && user) {
-        try {
-          const { data } = await supabase.functions.invoke('google-calendar-event', {
-            body: { 
-              action: 'get_tokens',
-              userId: user.id
-            }
-          });
-          
-          if (data.access_token) {
-            tokens = {
-              access_token: data.access_token,
-              refresh_token: data.refresh_token,
-              expires_in: data.expires_in,
-              expires_at: Date.now() + (data.expires_in * 1000)
-            };
-            
-            // Update localStorage with tokens from DB
-            localStorage.setItem('googleCalendarTokens', JSON.stringify(tokens));
-            console.log('Retrieved tokens from database');
-          }
-        } catch (err) {
-          console.error('Error getting tokens from database:', err);
-        }
-      }
-      
-      if (!tokens || !tokens.access_token) {
-        throw new Error('No valid Google Calendar access tokens found');
-      }
-      
-      // Create event details
-      const eventDetails = {
-        summary: `Take ${medication.name} ${medication.dosage}`,
-        description: medication.notes || `Remember to take your ${medication.name}. Dosage: ${medication.dosage}`,
-        startTime: combineDateTime(new Date(medication.start_date), medication.time),
-        endTime: addMinutes(combineDateTime(new Date(medication.start_date), medication.time), 15),
-        frequency: medication.frequency,
-        endDate: medication.end_date ? medication.end_date : null
-      };
+      setIsSyncingCalendar(true);
+      toast.info('Syncing medications with Google Calendar...');
 
-      console.log('Sending to the edge function:', { 
-        action: 'create',
-        event: eventDetails,
-        accessToken: tokens.access_token 
-      });
-
-      // Send to the edge function
-      const { data, error } = await supabase.functions.invoke('google-calendar-event', {
-        body: { 
-          action: 'create',
-          event: eventDetails,
-          accessToken: tokens.access_token 
-        }
-      });
-
-      if (error) {
-        console.error('Error invoking Google Calendar function:', error);
-        throw error;
+      const accessToken = await getAccessToken();
+      if (!accessToken) {
+        toast.error('Could not get access token for Google Calendar');
+        return;
       }
-      
-      if (!data.success) {
-        console.error('Error from Google Calendar function:', data.error);
-        throw new Error(data.error || 'Unknown error adding to Google Calendar');
+
+      // Create batch request to sync all medications
+      const requests = medications.map(med => syncMedicationToCalendar(med, accessToken));
+      const results = await Promise.allSettled(requests);
+
+      // Count successes and failures
+      const successful = results.filter(r => r.status === 'fulfilled').length;
+      const failed = results.filter(r => r.status === 'rejected').length;
+
+      if (failed === 0) {
+        toast.success(`Successfully synced ${successful} medications to Google Calendar`);
+      } else if (successful === 0) {
+        toast.error('Failed to sync medications to Google Calendar');
+      } else {
+        toast.warning(`Synced ${successful} medications, ${failed} failed`);
       }
-      
-      console.log('Added to Google Calendar:', data);
-      
-      return data;
     } catch (error: any) {
-      console.error('Error adding to Google Calendar:', error);
-      
-      // Try refreshing the token if we get an authentication error
-      if (error.message && (error.message.includes('401') || error.message.includes('invalid_token'))) {
-        try {
-          await refreshGoogleToken();
-          // We don't retry here to avoid potential infinite loops
-          toast.error('Google Calendar token expired. Please try again.');
-        } catch (refreshError) {
-          console.error('Error refreshing token:', refreshError);
-        }
-      }
-      
-      throw error;
+      console.error('Error syncing with Google Calendar:', error);
+      toast.error(`Sync failed: ${error.message}`);
+    } finally {
+      setIsSyncingCalendar(false);
     }
   };
 
-  const refreshGoogleToken = async () => {
-    try {
-      const tokensStr = localStorage.getItem('googleCalendarTokens');
-      if (!tokensStr) return null;
-      
-      const tokens = JSON.parse(tokensStr);
-      if (!tokens.refresh_token) return null;
-      
-      const { data, error } = await supabase.functions.invoke('google-calendar-event', {
-        body: { 
-          action: 'refresh',
-          refresh_token: tokens.refresh_token,
-          userId: user?.id
-        }
-      });
-      
-      if (error) throw error;
-      
-      if (data.access_token) {
-        const updatedTokens = {
-          ...tokens,
-          access_token: data.access_token,
-          expires_in: data.expires_in,
-          expires_at: Date.now() + (data.expires_in * 1000)
-        };
-        
-        localStorage.setItem('googleCalendarTokens', JSON.stringify(updatedTokens));
-        return data.access_token;
+  const syncMedicationToCalendar = async (medication: Medication, accessToken: string) => {
+    // Create event details
+    const eventDetails = {
+      summary: `Take ${medication.name} ${medication.dosage}`,
+      description: medication.notes || `Remember to take your ${medication.name}. Dosage: ${medication.dosage}`,
+      startTime: combineDateTime(new Date(medication.start_date), medication.time),
+      endTime: addMinutes(combineDateTime(new Date(medication.start_date), medication.time), 15),
+      frequency: medication.frequency,
+      endDate: medication.end_date
+    };
+
+    // Send to the edge function
+    const { data, error } = await supabase.functions.invoke('google-calendar-event', {
+      body: { 
+        action: 'create',
+        event: eventDetails,
+        accessToken
       }
-      
-      return null;
-    } catch (error) {
-      console.error('Error refreshing Google token:', error);
-      localStorage.removeItem('googleCalendarTokens');
-      localStorage.setItem('googleCalendarEnabled', 'false');
-      setIsGoogleCalendarEnabled(false);
-      toast.error('Failed to refresh Google Calendar access. Please reconnect.');
-      return null;
+    });
+
+    if (error || !data.success) {
+      console.error('Error syncing medication to Google Calendar:', error || data.error);
+      throw new Error(error?.message || data.error || 'Unknown error adding to Google Calendar');
     }
+    
+    return data;
   };
 
   const combineDateTime = (date: Date, timeStr: string) => {
@@ -525,182 +357,191 @@ const MedicationReminders = () => {
     });
   };
 
-  
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold">Medication Reminders</h2>
-        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <PlusCircle className="mr-2 h-4 w-4" /> Add Medication
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>Add New Medication</DialogTitle>
-              <DialogDescription>
-                Set up reminders for your medications.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Medication Name</Label>
-                  <Input 
-                    id="name" 
-                    placeholder="e.g. Aspirin"
-                    value={newMedication.name}
-                    onChange={(e) => setNewMedication({...newMedication, name: e.target.value})}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="dosage">Dosage</Label>
-                  <Input 
-                    id="dosage" 
-                    placeholder="e.g. 500mg"
-                    value={newMedication.dosage}
-                    onChange={(e) => setNewMedication({...newMedication, dosage: e.target.value})}
-                  />
-                </div>
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="frequency">Frequency</Label>
-                <Select 
-                  value={newMedication.frequency}
-                  onValueChange={(value) => setNewMedication({...newMedication, frequency: value})}
-                >
-                  <SelectTrigger id="frequency">
-                    <SelectValue placeholder="Select frequency" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {FREQUENCY_OPTIONS.map(option => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="time">Time to Take</Label>
-                <Input 
-                  id="time" 
-                  type="time"
-                  value={newMedication.time}
-                  onChange={(e) => setNewMedication({...newMedication, time: e.target.value})}
-                />
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="start_date">Start Date</Label>
-                  <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        id="start_date"
-                        variant={"outline"}
-                        className={cn(
-                          "w-full justify-start text-left font-normal"
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {newMedication.start_date ? (
-                          format(newMedication.start_date, "PPP")
-                        ) : (
-                          <span>Pick a date</span>
-                        )}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar
-                        mode="single"
-                        selected={newMedication.start_date}
-                        onSelect={(date) => {
-                          if (date) {
-                            setNewMedication({...newMedication, start_date: date});
-                            setIsCalendarOpen(false);
-                          }
-                        }}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={syncWithGoogleCalendar} 
+            disabled={isSyncingCalendar}
+          >
+            <Sync className={cn("mr-2 h-4 w-4", isSyncingCalendar && "animate-spin")} />
+            {isSyncingCalendar ? 'Syncing...' : 'Sync to Google Calendar'}
+          </Button>
+          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <PlusCircle className="mr-2 h-4 w-4" /> Add Medication
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Add New Medication</DialogTitle>
+                <DialogDescription>
+                  Set up reminders for your medications.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Medication Name</Label>
+                    <Input 
+                      id="name" 
+                      placeholder="e.g. Aspirin"
+                      value={newMedication.name}
+                      onChange={(e) => setNewMedication({...newMedication, name: e.target.value})}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="dosage">Dosage</Label>
+                    <Input 
+                      id="dosage" 
+                      placeholder="e.g. 500mg"
+                      value={newMedication.dosage}
+                      onChange={(e) => setNewMedication({...newMedication, dosage: e.target.value})}
+                    />
+                  </div>
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="end_date">End Date (Optional)</Label>
-                  <Popover open={isEndDateCalendarOpen} onOpenChange={setIsEndDateCalendarOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        id="end_date"
-                        variant={"outline"}
-                        className={cn(
-                          "w-full justify-start text-left font-normal"
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {newMedication.end_date ? (
-                          format(newMedication.end_date, "PPP")
-                        ) : (
-                          <span>No end date</span>
-                        )}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <div className="p-2">
-                        <Button 
-                          variant="ghost" 
-                          className="w-full justify-start"
-                          onClick={() => {
-                            setNewMedication({...newMedication, end_date: null});
+                  <Label htmlFor="frequency">Frequency</Label>
+                  <Select 
+                    value={newMedication.frequency}
+                    onValueChange={(value) => setNewMedication({...newMedication, frequency: value})}
+                  >
+                    <SelectTrigger id="frequency">
+                      <SelectValue placeholder="Select frequency" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {FREQUENCY_OPTIONS.map(option => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="time">Time to Take</Label>
+                  <Input 
+                    id="time" 
+                    type="time"
+                    value={newMedication.time}
+                    onChange={(e) => setNewMedication({...newMedication, time: e.target.value})}
+                  />
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="start_date">Start Date</Label>
+                    <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          id="start_date"
+                          variant={"outline"}
+                          className={cn(
+                            "w-full justify-start text-left font-normal"
+                          )}
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {newMedication.start_date ? (
+                            format(newMedication.start_date, "PPP")
+                          ) : (
+                            <span>Pick a date</span>
+                          )}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0">
+                        <Calendar
+                          mode="single"
+                          selected={newMedication.start_date}
+                          onSelect={(date) => {
+                            if (date) {
+                              setNewMedication({...newMedication, start_date: date});
+                              setIsCalendarOpen(false);
+                            }
+                          }}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="end_date">End Date (Optional)</Label>
+                    <Popover open={isEndDateCalendarOpen} onOpenChange={setIsEndDateCalendarOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          id="end_date"
+                          variant={"outline"}
+                          className={cn(
+                            "w-full justify-start text-left font-normal"
+                          )}
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {newMedication.end_date ? (
+                            format(newMedication.end_date, "PPP")
+                          ) : (
+                            <span>No end date</span>
+                          )}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0">
+                        <div className="p-2">
+                          <Button 
+                            variant="ghost" 
+                            className="w-full justify-start"
+                            onClick={() => {
+                              setNewMedication({...newMedication, end_date: null});
+                              setIsEndDateCalendarOpen(false);
+                            }}
+                          >
+                            Clear end date
+                          </Button>
+                        </div>
+                        <Calendar
+                          mode="single"
+                          selected={newMedication.end_date ?? undefined}
+                          onSelect={(date) => {
+                            setNewMedication({...newMedication, end_date: date});
                             setIsEndDateCalendarOpen(false);
                           }}
-                        >
-                          Clear end date
-                        </Button>
-                      </div>
-                      <Calendar
-                        mode="single"
-                        selected={newMedication.end_date ?? undefined}
-                        onSelect={(date) => {
-                          setNewMedication({...newMedication, end_date: date});
-                          setIsEndDateCalendarOpen(false);
-                        }}
-                        disabled={(date) => date < addDays(newMedication.start_date, 1)}
-                        initialFocus
-                        className="border-t"
-                      />
-                    </PopoverContent>
-                  </Popover>
+                          disabled={(date) => date < addDays(newMedication.start_date, 1)}
+                          initialFocus
+                          className="border-t"
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="notes">Notes (Optional)</Label>
+                  <Textarea 
+                    id="notes" 
+                    placeholder="Any special instructions..."
+                    value={newMedication.notes}
+                    onChange={(e) => setNewMedication({...newMedication, notes: e.target.value})}
+                  />
                 </div>
               </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="notes">Notes (Optional)</Label>
-                <Textarea 
-                  id="notes" 
-                  placeholder="Any special instructions..."
-                  value={newMedication.notes}
-                  onChange={(e) => setNewMedication({...newMedication, notes: e.target.value})}
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => {
-                resetForm();
-                setIsAddDialogOpen(false);
-              }}>
-                Cancel
-              </Button>
-              <Button onClick={handleAddMedication}>
-                Add Medication
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => {
+                  resetForm();
+                  setIsAddDialogOpen(false);
+                }}>
+                  Cancel
+                </Button>
+                <Button onClick={handleAddMedication}>
+                  Add Medication
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       
