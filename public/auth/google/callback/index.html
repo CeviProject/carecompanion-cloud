@@ -102,8 +102,11 @@
     // Function to safely communicate with the opener window
     function postMessageToOpener(message) {
       try {
-        if (window.opener && !window.opener.closed) {
-          window.opener.postMessage(message, window.location.origin);
+        if (window.opener) {
+          // Use postMessage with explicit origin for better security
+          const targetOrigin = window.location.origin;
+          console.log('Posting message to opener with origin:', targetOrigin);
+          window.opener.postMessage(message, targetOrigin);
           return true;
         }
       } catch (e) {
@@ -125,7 +128,7 @@
       }
       
       // Notify the opener about the error
-      const messageSent = postMessageToOpener({ 
+      postMessageToOpener({ 
         type: 'google_auth_error',
         error: error,
         errorDescription: errorDescription
@@ -134,27 +137,28 @@
       // Close window after a few seconds even in case of error
       setTimeout(() => {
         window.close();
-      }, messageSent ? 2000 : 5000);
+      }, 3000);
     } else if (code && state === 'google_calendar_auth') {
       // Try to send message to opener window
+      document.getElementById('status').textContent = 'Authorization Successful!';
+      
       const messageSent = postMessageToOpener({ 
         type: 'google_auth_callback',
         code: code
       });
       
       if (messageSent) {
-        document.getElementById('status').textContent = 'Authorization Successful!';
-        
-        // Close the window automatically after a short delay
-        setTimeout(() => {
-          window.close();
-        }, 2000);
+        console.log('Successfully sent authorization code to opener');
       } else {
-        document.getElementById('spinner').style.display = 'none';
-        document.getElementById('status').textContent = 'Authorization Complete';
+        console.error('Failed to communicate with opener window');
         document.getElementById('error-container').style.display = 'block';
         document.getElementById('error-message').textContent = 'Main window not found. Please close this window and return to the application.';
       }
+      
+      // Close the window automatically after a short delay
+      setTimeout(() => {
+        window.close();
+      }, 2000);
     } else {
       // Invalid response
       document.getElementById('spinner').style.display = 'none';
@@ -165,7 +169,7 @@
       // Close window after a few seconds
       setTimeout(() => {
         window.close();
-      }, 5000);
+      }, 3000);
     }
   </script>
 </body>

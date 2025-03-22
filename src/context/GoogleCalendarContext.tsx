@@ -24,10 +24,21 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
   const { user } = useAuth();
   const [isEnabled, setIsEnabled] = useState(false);
   const [tokens, setTokens] = useState<GoogleCalendarTokens | null>(null);
-  const authWindowRef = React.useRef<Window | null>(null);
-  const authCheckIntervalRef = React.useRef<number | null>(null);
+  const [isMounted, setIsMounted] = useState(false);
+  
+  // Instead of using a ref for the window and interval, use state to track them
+  const [authStateData, setAuthStateData] = useState<{
+    window: Window | null;
+    messageHandler: ((event: MessageEvent) => void) | null;
+  }>({
+    window: null,
+    messageHandler: null
+  });
 
   useEffect(() => {
+    setIsMounted(true);
+    console.log('GoogleCalendarProvider mounted');
+    
     // Check if Google Calendar is enabled
     const localEnabled = localStorage.getItem('googleCalendarEnabled');
     if (localEnabled === 'true') {
@@ -50,18 +61,101 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
     if (user) {
       fetchTokensFromDatabase();
     }
+    
+    // Setup event listener for message from the popup
+    const handleMessage = (event: MessageEvent) => {
+      console.log('Received message event in parent window:', event);
+      // Only process messages from our expected origin
+      if (event.origin !== window.location.origin) {
+        console.log('Ignoring message from unexpected origin:', event.origin);
+        return;
+      }
+      
+      // Handle auth callback
+      if (event.data && event.data.type === 'google_auth_callback' && event.data.code) {
+        console.log('Received auth callback with code:', event.data.code);
+        handleAuthCode(event.data.code);
+      } 
+      // Handle auth error
+      else if (event.data && event.data.type === 'google_auth_error') {
+        console.error('Auth error from popup:', event.data.error, event.data.errorDescription);
+        toast.error(`Google Calendar connection failed: ${event.data.errorDescription || event.data.error || 'Unknown error'}`);
+      }
+    };
+    
+    // Add the global message listener
+    window.addEventListener('message', handleMessage);
 
-    // Clean up interval on unmount
     return () => {
-      if (authCheckIntervalRef.current) {
-        window.clearInterval(authCheckIntervalRef.current);
-        authCheckIntervalRef.current = null;
+      setIsMounted(false);
+      console.log('GoogleCalendarProvider unmounting');
+      
+      // Clean up the message listener
+      window.removeEventListener('message', handleMessage);
+      
+      // Close any open auth window
+      if (authStateData.window && !authStateData.window.closed) {
+        try {
+          authStateData.window.close();
+        } catch (err) {
+          console.error('Error closing auth window:', err);
+        }
       }
     };
   }, [user]);
 
+  // Handle auth code from the popup
+  const handleAuthCode = async (authCode: string) => {
+    if (!isMounted || !user) {
+      console.error('Component not mounted or user not logged in, cannot handle auth code');
+      return;
+    }
+    
+    console.log('Processing auth code');
+    try {
+      // Exchange the code for tokens
+      const { data: tokenData, error: tokenError } = await supabase.functions.invoke('google-calendar-event', {
+        body: { 
+          action: 'token', 
+          code: authCode,
+          userId: user?.id
+        }
+      });
+      
+      if (tokenError) {
+        console.error('Error exchanging auth code for tokens:', tokenError);
+        toast.error('Failed to connect to Google Calendar');
+        return;
+      }
+      
+      console.log('Received token data:', tokenData);
+      
+      // Save the tokens
+      const newTokens = {
+        access_token: tokenData.access_token,
+        refresh_token: tokenData.refresh_token,
+        expires_in: tokenData.expires_in,
+        expires_at: Date.now() + (tokenData.expires_in * 1000)
+      };
+      
+      console.log('Saving new tokens:', newTokens);
+      setTokens(newTokens);
+      setIsEnabled(true);
+      
+      // Save to localStorage
+      localStorage.setItem('googleCalendarTokens', JSON.stringify(newTokens));
+      localStorage.setItem('googleCalendarEnabled', 'true');
+      
+      // Show success message
+      toast.success('Successfully connected to Google Calendar');
+    } catch (error) {
+      console.error('Error handling auth code:', error);
+      toast.error('Failed to complete Google Calendar authorization');
+    }
+  };
+
   const fetchTokensFromDatabase = async () => {
-    if (!user) return;
+    if (!user || !isMounted) return;
     
     try {
       console.log('Fetching tokens from database for user:', user.id);
@@ -108,6 +202,11 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
   };
 
   const authorizeGoogleCalendar = async () => {
+    if (!isMounted) {
+      console.error('Component not mounted, cannot authorize');
+      return;
+    }
+    
     try {
       console.log('Starting Google Calendar authorization process');
       // Get the authorization URL
@@ -124,114 +223,32 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
       console.log('Received authorization URL:', data?.authUrl);
       
       // Close any existing auth window
-      if (authWindowRef.current && !authWindowRef.current.closed) {
-        authWindowRef.current.close();
+      if (authStateData.window && !authStateData.window.closed) {
+        try {
+          authStateData.window.close();
+        } catch (err) {
+          console.error('Error closing existing auth window:', err);
+        }
       }
       
-      // Clear any existing interval
-      if (authCheckIntervalRef.current) {
-        window.clearInterval(authCheckIntervalRef.current);
-        authCheckIntervalRef.current = null;
-      }
-      
-      // Open the authorization URL in a new window with noopener to prevent COOP issues
-      authWindowRef.current = window.open(
+      // Open the authorization URL in a new window
+      // Use window.open with specific features to avoid COOP issues
+      const authWindow = window.open(
         data.authUrl, 
-        'googleAuthWindow', 
-        'width=500,height=600,noopener,noreferrer'
+        '_blank', 
+        'width=500,height=600,noopener'
       );
       
-      if (!authWindowRef.current) {
+      // Update the state with the new window
+      setAuthStateData({
+        window: authWindow,
+        messageHandler: null
+      });
+      
+      if (!authWindow) {
         toast.error('Popup blocked. Please allow popups for this site.');
         return;
       }
-      
-      // Set up message listener
-      const handleAuthCallback = async (event: MessageEvent) => {
-        // Only process messages from our expected origin
-        if (event.origin !== window.location.origin) return;
-        
-        // Check if this is the auth callback message
-        if (event.data && event.data.type === 'google_auth_callback' && event.data.code) {
-          const authCode = event.data.code;
-          console.log('Received auth code from callback:', authCode);
-          
-          // Exchange the code for tokens
-          const { data: tokenData, error: tokenError } = await supabase.functions.invoke('google-calendar-event', {
-            body: { 
-              action: 'token', 
-              code: authCode,
-              userId: user?.id
-            }
-          });
-          
-          if (tokenError) {
-            console.error('Error exchanging auth code for tokens:', tokenError);
-            toast.error('Failed to connect to Google Calendar');
-            return;
-          }
-          
-          console.log('Received token data:', tokenData);
-          
-          // Save the tokens
-          const newTokens = {
-            access_token: tokenData.access_token,
-            refresh_token: tokenData.refresh_token,
-            expires_in: tokenData.expires_in,
-            expires_at: Date.now() + (tokenData.expires_in * 1000)
-          };
-          
-          console.log('Saving new tokens:', newTokens);
-          setTokens(newTokens);
-          setIsEnabled(true);
-          
-          // Save to localStorage
-          localStorage.setItem('googleCalendarTokens', JSON.stringify(newTokens));
-          localStorage.setItem('googleCalendarEnabled', 'true');
-          
-          // Show success message
-          toast.success('Successfully connected to Google Calendar');
-          
-          // Remove event listener
-          window.removeEventListener('message', handleAuthCallback);
-          
-          // Clear check interval if it exists
-          if (authCheckIntervalRef.current) {
-            window.clearInterval(authCheckIntervalRef.current);
-            authCheckIntervalRef.current = null;
-          }
-        } else if (event.data && event.data.type === 'google_auth_error') {
-          console.error('Auth error from popup:', event.data.error, event.data.errorDescription);
-          toast.error(`Google Calendar connection failed: ${event.data.errorDescription || event.data.error || 'Unknown error'}`);
-          
-          // Remove event listener
-          window.removeEventListener('message', handleAuthCallback);
-          
-          // Clear check interval if it exists
-          if (authCheckIntervalRef.current) {
-            window.clearInterval(authCheckIntervalRef.current);
-            authCheckIntervalRef.current = null;
-          }
-        }
-      };
-      
-      // Add event listener for the callback
-      window.addEventListener('message', handleAuthCallback);
-      
-      // Set up polling to check if the window is closed without completing
-      authCheckIntervalRef.current = window.setInterval(() => {
-        if (authWindowRef.current && authWindowRef.current.closed) {
-          console.log('Auth window was closed manually');
-          
-          // Clean up
-          window.removeEventListener('message', handleAuthCallback);
-          window.clearInterval(authCheckIntervalRef.current!);
-          authCheckIntervalRef.current = null;
-          
-          // Notify user if needed
-          // We don't need to show an error here as the user may have just closed the window
-        }
-      }, 1000) as unknown as number;
       
     } catch (error) {
       console.error('Error authorizing Google Calendar:', error);
@@ -240,6 +257,11 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
   };
 
   const disconnectGoogleCalendar = () => {
+    if (!isMounted) {
+      console.error('Component not mounted, cannot disconnect');
+      return;
+    }
+    
     // Clear tokens
     setTokens(null);
     setIsEnabled(false);
@@ -269,6 +291,11 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
   };
 
   const getAccessToken = async (): Promise<string | null> => {
+    if (!isMounted) {
+      console.error('Component not mounted, cannot get access token');
+      return null;
+    }
+    
     console.log('Getting access token, current tokens:', tokens);
     
     // First check if we have valid tokens
