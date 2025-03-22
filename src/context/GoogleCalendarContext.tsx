@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useAuth } from './AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -26,18 +25,15 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
   const [tokens, setTokens] = useState<GoogleCalendarTokens | null>(null);
   const [isMounted, setIsMounted] = useState(false);
 
-  // Setup event listener for receiving auth code from popup
   useEffect(() => {
     setIsMounted(true);
     console.log('GoogleCalendarProvider mounted');
     
-    // Check if Google Calendar is enabled
     const localEnabled = localStorage.getItem('googleCalendarEnabled');
     if (localEnabled === 'true') {
       setIsEnabled(true);
     }
     
-    // Initialize tokens from localStorage if available
     const tokensStr = localStorage.getItem('googleCalendarTokens');
     if (tokensStr) {
       try {
@@ -49,14 +45,11 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
       }
     }
     
-    // If user is logged in, check for tokens in database
     if (user) {
       fetchTokensFromDatabase();
     }
     
-    // Handler for receiving messages from the popup
     const handleAuthMessage = (event: MessageEvent) => {
-      // Only process messages from our expected origin
       if (event.origin !== window.location.origin) {
         console.log('Ignoring message from unexpected origin:', event.origin);
         return;
@@ -64,22 +57,18 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
       
       console.log('Received message in parent window:', event.data);
       
-      // Handle auth callback
       if (event.data && event.data.type === 'google_auth_callback' && event.data.code) {
         console.log('Received auth code from popup:', event.data.code);
         handleAuthCode(event.data.code);
       } 
-      // Handle auth error
       else if (event.data && event.data.type === 'google_auth_error') {
         console.error('Auth error from popup:', event.data.error, event.data.errorDescription);
         toast.error(`Google Calendar connection failed: ${event.data.errorDescription || event.data.error || 'Unknown error'}`);
       }
     };
     
-    // Add event listener
     window.addEventListener('message', handleAuthMessage);
     
-    // Check for auth code in localStorage (fallback method for popup failures)
     const checkLocalStorageAuth = () => {
       const storedCode = localStorage.getItem('google_auth_code');
       const timestamp = localStorage.getItem('google_auth_timestamp');
@@ -87,35 +76,29 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
       if (storedCode && timestamp) {
         const age = Date.now() - parseInt(timestamp);
         
-        // Only use codes that are less than 5 minutes old
         if (age < 5 * 60 * 1000) {
           console.log('Found valid auth code in localStorage');
           handleAuthCode(storedCode);
           
-          // Clear the stored code after using
           localStorage.removeItem('google_auth_code');
           localStorage.removeItem('google_auth_timestamp');
         } else {
-          // Clear expired code
           localStorage.removeItem('google_auth_code');
           localStorage.removeItem('google_auth_timestamp');
         }
       }
     };
     
-    // Run once on mount
     checkLocalStorageAuth();
     
     return () => {
       setIsMounted(false);
       console.log('GoogleCalendarProvider unmounting');
       
-      // Remove the message listener
       window.removeEventListener('message', handleAuthMessage);
     };
   }, [user]);
 
-  // Handle auth code from the popup or localStorage
   const handleAuthCode = async (authCode: string) => {
     if (!isMounted || !user) {
       console.error('Component not mounted or user not logged in, cannot handle auth code');
@@ -124,7 +107,6 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
     
     console.log('Processing auth code');
     try {
-      // Exchange the code for tokens
       const { data: tokenData, error: tokenError } = await supabase.functions.invoke('google-calendar-event', {
         body: { 
           action: 'token', 
@@ -141,7 +123,6 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
       
       console.log('Received token data:', tokenData);
       
-      // Save the tokens
       const newTokens = {
         access_token: tokenData.access_token,
         refresh_token: tokenData.refresh_token,
@@ -153,11 +134,9 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
       setTokens(newTokens);
       setIsEnabled(true);
       
-      // Save to localStorage
       localStorage.setItem('googleCalendarTokens', JSON.stringify(newTokens));
       localStorage.setItem('googleCalendarEnabled', 'true');
       
-      // Show success message
       toast.success('Successfully connected to Google Calendar');
     } catch (error) {
       console.error('Error handling auth code:', error);
@@ -196,12 +175,10 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
         setTokens(newTokens);
         setIsEnabled(true);
         
-        // Update localStorage
         localStorage.setItem('googleCalendarTokens', JSON.stringify(newTokens));
         localStorage.setItem('googleCalendarEnabled', 'true');
       } else if (data && !data.found) {
         console.log('No Google Calendar tokens found for this user');
-        // Clear any stale token data
         setTokens(null);
         setIsEnabled(false);
         localStorage.removeItem('googleCalendarTokens');
@@ -220,7 +197,6 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
     
     try {
       console.log('Starting Google Calendar authorization process');
-      // Get the authorization URL
       const { data, error } = await supabase.functions.invoke('google-calendar-event', {
         body: { action: 'authorize' }
       });
@@ -233,12 +209,10 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
       
       console.log('Received authorization URL:', data?.authUrl);
       
-      // Open the authorization URL in a new tab/window
-      // Using 'noopener,noreferrer' to prevent COOP issues
       const authWindow = window.open(
         data.authUrl, 
         '_blank', 
-        'width=600,height=700,noopener,noreferrer'
+        'width=600,height=700,noopener'
       );
       
       if (!authWindow) {
@@ -256,17 +230,13 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
       return;
     }
     
-    // Clear tokens
     setTokens(null);
     setIsEnabled(false);
     
-    // Remove from localStorage
     localStorage.removeItem('googleCalendarTokens');
     localStorage.setItem('googleCalendarEnabled', 'false');
     
-    // If user is logged in, we could also delete from database
     if (user) {
-      // Delete tokens from database
       supabase.functions.invoke('google-calendar-event', {
         body: { 
           action: 'revoke',
@@ -292,7 +262,6 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
     
     console.log('Getting access token, current tokens:', tokens);
     
-    // First check if we have valid tokens
     if (tokens) {
       if (tokens.expires_at > Date.now()) {
         console.log('Using existing valid access token');
@@ -301,7 +270,6 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
       
       console.log('Token expired, attempting to refresh');
       
-      // Tokens expired, try to refresh
       if (tokens.refresh_token) {
         try {
           const { data, error } = await supabase.functions.invoke('google-calendar-event', {
@@ -327,7 +295,6 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
             console.log('Setting refreshed tokens:', newTokens);
             setTokens(newTokens);
             
-            // Update localStorage
             localStorage.setItem('googleCalendarTokens', JSON.stringify(newTokens));
             
             return data.access_token;
@@ -340,7 +307,6 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
       }
     }
     
-    // If we don't have tokens locally but user is logged in, try to fetch from database
     if (user && !tokens) {
       console.log('No local tokens, trying to fetch from database');
       try {
@@ -367,13 +333,11 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
           setTokens(newTokens);
           setIsEnabled(true);
           
-          // Update localStorage
           localStorage.setItem('googleCalendarTokens', JSON.stringify(newTokens));
           localStorage.setItem('googleCalendarEnabled', 'true');
           
           return data.access_token;
         } else {
-          // If no tokens were found, we need to authorize
           console.log('No tokens found in the database, need to authorize');
           toast.info('Please connect your Google Calendar to continue');
           setIsEnabled(false);

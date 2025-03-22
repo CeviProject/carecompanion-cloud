@@ -100,8 +100,8 @@
     const errorDescription = urlParams.get('error_description');
     
     // Determine the application origin based on the environment
-    // In development, we're using port 3000
-    const appOrigin = window.location.protocol + '//' + window.location.hostname + ':3000';
+    // In development, we're using port 8080 now
+    const appOrigin = window.location.protocol + '//' + window.location.hostname + ':8080';
     console.log("Callback page loaded. App origin:", appOrigin);
     
     // Function to send messages to all potential parent windows

@@ -4,7 +4,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 const GOOGLE_CLIENT_ID = Deno.env.get('GOOGLE_CLIENT_ID');
 const GOOGLE_CLIENT_SECRET = Deno.env.get('GOOGLE_CLIENT_SECRET');
 // This should match exactly what you configured in Google Cloud Console
-const REDIRECT_URI = Deno.env.get('REDIRECT_URI') || 'http://localhost:3000/auth/google/callback';
+const REDIRECT_URI = Deno.env.get('REDIRECT_URI') || 'http://localhost:8080/auth/google/callback';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -727,4 +727,3 @@ function createRecurrenceRule(frequency: string, endDate: string | null): string
   
   return rule;
 }
-

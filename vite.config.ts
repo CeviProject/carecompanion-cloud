@@ -8,7 +8,7 @@ import { componentTagger } from "lovable-tagger";
 export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
-    port: 3000, // Changed from 8080 to 3000 to match Google auth redirect URI
+    port: 8080, // Set to 8080 as required
   },
   plugins: [
     react(),
