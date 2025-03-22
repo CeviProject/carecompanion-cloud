@@ -94,6 +94,7 @@ export type Database = {
           ai_assessment: string | null
           created_at: string
           id: string
+          patient_data: Json | null
           patient_id: string
           query_text: string
           status: string | null
@@ -102,6 +103,7 @@ export type Database = {
           ai_assessment?: string | null
           created_at?: string
           id?: string
+          patient_data?: Json | null
           patient_id: string
           query_text: string
           status?: string | null
@@ -110,6 +112,7 @@ export type Database = {
           ai_assessment?: string | null
           created_at?: string
           id?: string
+          patient_data?: Json | null
           patient_id?: string
           query_text?: string
           status?: string | null

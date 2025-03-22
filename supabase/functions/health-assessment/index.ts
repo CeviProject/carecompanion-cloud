@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
@@ -75,11 +74,10 @@ Format your response in a helpful, clear manner that is informative but not alar
 `;
 
     console.log('Making request to Gemini API with prompt length:', prompt.length);
-    console.log('Using API URL:', GEMINI_API_URL);
 
     try {
       const apiUrl = `${GEMINI_API_URL}?key=${GEMINI_API_KEY}`;
-      console.log('Full API URL (without key):', GEMINI_API_URL);
+      console.log('Using Gemini API URL:', GEMINI_API_URL);
       
       const response = await fetch(apiUrl, {
         method: 'POST',
@@ -167,7 +165,6 @@ Format your response in a helpful, clear manner that is informative but not alar
   }
 });
 
-// Helper function to extract suggested specialties from assessment
 function extractSuggestedSpecialties(assessment: string): string[] {
   const specialtiesMap: Record<string, string[]> = {
     'cardiology': ['heart', 'chest pain', 'palpitations', 'cardiovascular', 'cardiologist'],
@@ -212,7 +209,6 @@ function extractSuggestedSpecialties(assessment: string): string[] {
   return matchedSpecialties;
 }
 
-// Helper function to extract recommended hospitals from assessment
 function extractRecommendedHospitals(assessment: string): Array<{ name: string, address: string, specialty: string }> {
   const hospitals: Array<{ name: string, address: string, specialty: string }> = [];
   
