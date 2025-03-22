@@ -10,6 +10,7 @@ type AuthContextType = {
   user: User | null;
   profile: any | null;
   loading: boolean;
+  isAuthenticated: boolean; // Add a simple boolean flag for authentication status
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, userData: any) => Promise<void>;
   signOut: () => Promise<void>;
@@ -22,6 +23,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false); // Add authentication flag
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -31,6 +33,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         console.log('Auth state changed:', event);
         setSession(session);
         setUser(session?.user ?? null);
+        setIsAuthenticated(!!session?.user); // Update authentication flag
         
         if (session?.user) {
           const { data, error } = await supabase
@@ -56,6 +59,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
+      setIsAuthenticated(!!session?.user); // Update authentication flag
       
       if (session?.user) {
         supabase
@@ -137,6 +141,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         user,
         profile,
         loading,
+        isAuthenticated,
         signIn,
         signUp,
         signOut,

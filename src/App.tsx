@@ -22,13 +22,13 @@ const ProtectedRoute = ({
   children: React.ReactNode, 
   requiredRole?: 'patient' | 'doctor' 
 }) => {
-  const { user, profile, loading } = useAuth();
+  const { user, profile, loading, isAuthenticated } = useAuth();
 
   if (loading) {
     return <div className="flex h-screen items-center justify-center">Loading...</div>;
   }
 
-  if (!user) {
+  if (!isAuthenticated) {
     return <Navigate to="/auth/login" replace />;
   }
 
@@ -41,13 +41,13 @@ const ProtectedRoute = ({
 
 // Public only route (not accessible when logged in)
 const PublicOnlyRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, profile, loading } = useAuth();
+  const { loading, isAuthenticated, profile } = useAuth();
 
   if (loading) {
     return <div className="flex h-screen items-center justify-center">Loading...</div>;
   }
 
-  if (user) {
+  if (isAuthenticated) {
     return <Navigate to={`/dashboard/${profile?.role || 'patient'}`} replace />;
   }
 
