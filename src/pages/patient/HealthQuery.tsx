@@ -5,13 +5,32 @@ import HealthQueryForm from '@/components/patient/HealthQueryForm';
 import PatientNavbar from '@/components/patient/PatientNavbar';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/context/AuthContext';
 
 const PatientHealthQuery = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
 
-  const handleQuerySubmitted = (queryData: any) => {
-    toast.success('Health query submitted successfully!');
-    navigate('/patient/assessment');
+  const handleQuerySubmitted = async (queryData: any) => {
+    try {
+      // Save the query data to the user's history for later reference
+      if (user) {
+        const { error } = await supabase
+          .from('health_queries')
+          .update({ status: 'completed' })
+          .eq('id', queryData.id);
+          
+        if (error) throw error;
+      }
+      
+      toast.success('Health query submitted successfully!');
+      navigate('/patient/assessment');
+    } catch (error: any) {
+      console.error('Error updating health query status:', error);
+      toast.error('Error saving your health query. Please try again.');
+      navigate('/patient/assessment');
+    }
   };
 
   return (

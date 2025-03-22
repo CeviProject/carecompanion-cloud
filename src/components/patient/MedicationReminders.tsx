@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -61,6 +62,7 @@ const MedicationReminders = () => {
     if (user) {
       fetchMedications();
       
+      // Set up real-time subscription for medications
       const channel = supabase
         .channel('medications-changes')
         .on(
@@ -72,24 +74,33 @@ const MedicationReminders = () => {
             filter: `user_id=eq.${user.id}`
           },
           (payload) => {
+            console.log('Medication change detected:', payload);
+            
             if (payload.eventType === 'INSERT') {
+              console.log('New medication added:', payload.new);
               setMedications(prev => [payload.new as Medication, ...prev]);
               checkIfMedicationDueToday(payload.new as Medication);
               toast.success(`Medication "${payload.new.name}" added`);
             } else if (payload.eventType === 'UPDATE') {
+              console.log('Medication updated:', payload.new);
               setMedications(prev => 
                 prev.map(med => med.id === payload.new.id ? payload.new as Medication : med)
               );
               toast.info(`Medication "${payload.new.name}" updated`);
             } else if (payload.eventType === 'DELETE') {
+              console.log('Medication deleted:', payload.old);
               setMedications(prev => prev.filter(med => med.id !== payload.old.id));
+              setTodaysMedications(prev => prev.filter(med => med.id !== payload.old.id));
               toast.info(`Medication removed`);
             }
           }
         )
         .subscribe();
         
+      console.log('Subscribed to medications changes');
+      
       return () => {
+        console.log('Unsubscribing from medications changes');
         supabase.removeChannel(channel);
       };
     }
@@ -115,6 +126,8 @@ const MedicationReminders = () => {
   const fetchMedications = async () => {
     try {
       setIsLoading(true);
+      console.log('Fetching medications for user:', user?.id);
+      
       const { data, error } = await supabase
         .from('medications')
         .select('*')
@@ -123,6 +136,7 @@ const MedicationReminders = () => {
 
       if (error) throw error;
       
+      console.log('Fetched medications:', data?.length || 0);
       setMedications(data as Medication[]);
     } catch (error: any) {
       console.error('Error fetching medications:', error);
@@ -209,6 +223,8 @@ const MedicationReminders = () => {
         return;
       }
 
+      console.log('Adding new medication:', newMedication);
+      
       const { data, error } = await supabase
         .from('medications')
         .insert({
@@ -226,6 +242,7 @@ const MedicationReminders = () => {
 
       if (error) throw error;
 
+      console.log('Medication added successfully:', data);
       toast.success('Medication saved successfully');
       
       resetForm();
@@ -238,12 +255,16 @@ const MedicationReminders = () => {
 
   const handleDeleteMedication = async (id: string) => {
     try {
+      console.log('Deleting medication with id:', id);
+      
       const { error } = await supabase
         .from('medications')
         .delete()
         .eq('id', id);
 
       if (error) throw error;
+      
+      console.log('Medication deleted successfully');
     } catch (error: any) {
       console.error('Error deleting medication:', error);
       toast.error(`Failed to delete medication: ${error.message}`);

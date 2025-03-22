@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Heart, Plus, Share, Star, RefreshCw } from 'lucide-react';
+import { Heart, Plus, Share, Star, RefreshCw, Lightbulb } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -34,10 +35,12 @@ const HealthTips = () => {
     is_public: false
   });
   const [publicTipsCount, setPublicTipsCount] = useState(0);
+  const [recentHealthIssues, setRecentHealthIssues] = useState<string[]>([]);
 
   useEffect(() => {
     if (user) {
       fetchHealthTips();
+      fetchRecentHealthIssues();
       
       const channel = supabase
         .channel('health-tips-changes')
@@ -128,6 +131,34 @@ const HealthTips = () => {
     }
   };
 
+  const fetchRecentHealthIssues = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('health_queries')
+        .select('query_text, patient_data')
+        .eq('patient_id', user?.id)
+        .order('created_at', { ascending: false })
+        .limit(3);
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        const issues = data.map(item => {
+          let symptoms = item.query_text;
+          if (item.patient_data && typeof item.patient_data === 'object') {
+            if ('symptoms' in item.patient_data) {
+              symptoms = (item.patient_data as any).symptoms;
+            }
+          }
+          return symptoms;
+        });
+        setRecentHealthIssues(issues);
+      }
+    } catch (error: any) {
+      console.error('Error fetching recent health issues:', error.message);
+    }
+  };
+
   const handleAddTip = async () => {
     try {
       if (!newTip.title || !newTip.content) {
@@ -188,8 +219,16 @@ const HealthTips = () => {
   const generateAITip = async () => {
     try {
       setIsGenerating(true);
+      
+      const contextData = {
+        user_id: user?.id,
+        recentIssues: recentHealthIssues.length > 0 ? recentHealthIssues : undefined
+      };
+      
+      toast.info('Generating personalized health tip...');
+      
       const { data, error } = await supabase.functions.invoke('generate-health-tip', {
-        body: { user_id: user?.id }
+        body: contextData
       });
 
       if (error) throw error;
@@ -217,6 +256,55 @@ const HealthTips = () => {
     } catch (error: any) {
       console.error('Error generating AI tip:', error.message);
       toast.error(`Failed to generate AI tip: ${error.message}`);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const generateContextualTip = async () => {
+    try {
+      if (recentHealthIssues.length === 0) {
+        toast.info('Generating general health tip as no recent health issues found');
+      } else {
+        toast.info('Generating health tip based on your recent health concerns');
+      }
+      
+      setIsGenerating(true);
+      
+      const contextData = {
+        user_id: user?.id,
+        recentIssues: recentHealthIssues
+      };
+      
+      const { data, error } = await supabase.functions.invoke('generate-health-tip', {
+        body: contextData
+      });
+
+      if (error) throw error;
+      
+      if (data && data.success) {
+        const { data: newTip, error: insertError } = await supabase
+          .from('health_tips')
+          .insert({
+            user_id: user?.id,
+            title: data.tip.title || 'Personalized Health Tip',
+            content: data.tip.content,
+            source: 'ai_contextual',
+            is_public: false,
+            is_favorite: false
+          })
+          .select('*')
+          .single();
+          
+        if (insertError) throw insertError;
+        
+        toast.success('Personalized health tip created based on your health history!');
+      } else {
+        throw new Error(data?.message || 'Failed to generate personalized tip');
+      }
+    } catch (error: any) {
+      console.error('Error generating contextual tip:', error.message);
+      toast.error(`Failed to generate personalized tip: ${error.message}`);
     } finally {
       setIsGenerating(false);
     }
@@ -253,6 +341,24 @@ const HealthTips = () => {
               {publicTipsCount} Public Tips
             </span>
           )}
+          <Button 
+            variant="outline" 
+            onClick={generateContextualTip} 
+            disabled={isGenerating}
+            className="bg-gradient-to-r from-indigo-100 to-purple-100 hover:from-indigo-200 hover:to-purple-200"
+          >
+            {isGenerating ? (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                Personalizing...
+              </>
+            ) : (
+              <>
+                <Lightbulb className="mr-2 h-4 w-4 text-indigo-600" />
+                Personalized Tip
+              </>
+            )}
+          </Button>
           <Button variant="outline" onClick={generateAITip} disabled={isGenerating}>
             {isGenerating ? (
               <>
@@ -260,7 +366,7 @@ const HealthTips = () => {
                 Generating...
               </>
             ) : (
-              <>Generate AI Tip</>
+              <>General AI Tip</>
             )}
           </Button>
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
@@ -334,7 +440,14 @@ const HealthTips = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {healthTips.map((tip) => (
-            <Card key={tip.id} className={tip.source === 'ai' ? 'border-blue-200' : 'border-gray-200'}>
+            <Card 
+              key={tip.id} 
+              id={`tip-${tip.id}`} 
+              className={`transition-all duration-300 hover:shadow-md ${
+                tip.source === 'ai' ? 'border-blue-200' : 
+                tip.source === 'ai_contextual' ? 'border-purple-200' : 'border-gray-200'
+              } ${tip.is_favorite ? 'bg-amber-50' : ''}`}
+            >
               <CardHeader>
                 <div className="flex justify-between items-start">
                   <CardTitle className="mr-8">{tip.title}</CardTitle>
@@ -352,10 +465,22 @@ const HealthTips = () => {
                     </Button>
                   )}
                 </div>
-                <CardDescription>
-                  {tip.source === 'ai' ? 'AI Generated' : 'Manual Entry'} 
-                  {tip.is_public && ' • Public'}
-                  {tip.user_id !== user?.id && ' • Shared by others'}
+                <CardDescription className="flex flex-wrap gap-2 mt-1">
+                  {tip.source === 'ai' && (
+                    <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full text-xs">AI Generated</span>
+                  )}
+                  {tip.source === 'ai_contextual' && (
+                    <span className="px-2 py-0.5 bg-purple-100 text-purple-800 rounded-full text-xs">Personalized</span>
+                  )}
+                  {tip.source === 'manual' && (
+                    <span className="px-2 py-0.5 bg-gray-100 text-gray-800 rounded-full text-xs">Manual</span>
+                  )}
+                  {tip.is_public && (
+                    <span className="px-2 py-0.5 bg-green-100 text-green-800 rounded-full text-xs">Public</span>
+                  )}
+                  {tip.user_id !== user?.id && (
+                    <span className="px-2 py-0.5 bg-orange-100 text-orange-800 rounded-full text-xs">Shared</span>
+                  )}
                 </CardDescription>
               </CardHeader>
               <CardContent>
