@@ -99,61 +99,66 @@
     const error = urlParams.get('error');
     const errorDescription = urlParams.get('error_description');
     
-    // Get the origin for message posting - important for production
-    const appOrigin = window.location.origin;
+    // Determine the application origin based on the environment
+    // In development, we're using port 3000
+    const appOrigin = window.location.protocol + '//' + window.location.hostname + ':3000';
     console.log("Callback page loaded. App origin:", appOrigin);
     
-    // Try to communicate with opener if available
+    // Function to send messages to all potential parent windows
+    function sendMessageToParents() {
+      try {
+        if (code && state === 'google_calendar_auth') {
+          // Store in localStorage as fallback
+          try {
+            localStorage.setItem('google_auth_code', code);
+            localStorage.setItem('google_auth_timestamp', Date.now().toString());
+            console.log('Stored auth code in localStorage as fallback');
+          } catch (e) {
+            console.error('Failed to store in localStorage:', e);
+          }
+          
+          // Try sending to opener
+          if (window.opener) {
+            console.log('Sending auth code to opener...');
+            window.opener.postMessage({
+              type: 'google_auth_callback',
+              code: code
+            }, appOrigin);
+            console.log('Message sent to opener');
+          } else {
+            console.log('No opener found, setting redirect flag');
+            sessionStorage.setItem('process_google_auth', 'true');
+          }
+          
+          // Send message to parent if in iframe
+          if (window.parent && window.parent !== window) {
+            console.log('Sending auth code to parent...');
+            window.parent.postMessage({
+              type: 'google_auth_callback',
+              code: code
+            }, appOrigin);
+            console.log('Message sent to parent');
+          }
+        }
+      } catch (e) {
+        console.error('Error sending message:', e);
+      }
+    }
+    
+    // Process the OAuth response
     if (code && state === 'google_calendar_auth') {
       document.getElementById('status').textContent = 'Authorization Successful!';
       
-      // First try localStorage as a fallback method
-      try {
-        localStorage.setItem('google_auth_code', code);
-        localStorage.setItem('google_auth_timestamp', Date.now().toString());
-        console.log('Stored auth code in localStorage as fallback');
-      } catch (e) {
-        console.error('Failed to store in localStorage:', e);
-      }
+      // Send message to parent windows
+      sendMessageToParents();
       
-      // Try to send message to opener
-      try {
-        if (window.opener) {
-          console.log('Sending auth code to opener...');
-          
-          // Post message to parent window
-          window.opener.postMessage({
-            type: 'google_auth_callback',
-            code: code
-          }, appOrigin);
-          
-          console.log('Message sent to opener');
-        } else {
-          console.warn('Opener window not available');
-          
-          // Set a flag in localStorage to indicate redirect should be processed
-          try {
-            sessionStorage.setItem('process_google_auth', 'true');
-            console.log('Set redirect flag in sessionStorage');
-          } catch (e) {
-            console.error('Failed to set sessionStorage flag:', e);
-          }
-          
-          // Redirect back to the main application
-          window.location.href = appOrigin + '/dashboard/patient';
-        }
-      } catch (e) {
-        console.error('Error communicating with opener:', e);
-        document.getElementById('error-container').style.display = 'block';
-        document.getElementById('error-message').textContent = 'Error communicating with main application. Please close this window and return to the app.';
-      }
-      
-      // Close window after short delay
+      // Close window or redirect after delay
       setTimeout(() => {
         if (window.opener) {
+          console.log('Closing popup window');
           window.close();
         } else {
-          // If no opener, redirect to main app
+          console.log('Redirecting to dashboard');
           window.location.href = appOrigin + '/dashboard/patient';
         }
       }, 2000);
@@ -178,8 +183,15 @@
             errorDescription: errorDescription
           }, appOrigin);
         }
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({
+            type: 'google_auth_error',
+            error: error,
+            errorDescription: errorDescription
+          }, appOrigin);
+        }
       } catch (e) {
-        console.error('Error notifying opener about auth error:', e);
+        console.error('Error notifying about auth error:', e);
       }
       
       // Close window or redirect after delay
