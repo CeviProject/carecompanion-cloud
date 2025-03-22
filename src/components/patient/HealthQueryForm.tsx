@@ -8,8 +8,9 @@ import { Form, FormField, FormItem, FormLabel, FormControl } from '@/components/
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertCircle } from 'lucide-react';
 import { useForm } from 'react-hook-form';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface HealthQueryFormProps {
   onQuerySubmitted: (queryData: any) => void;
@@ -26,6 +27,7 @@ interface FormValues {
 const HealthQueryForm = ({ onQuerySubmitted }: HealthQueryFormProps) => {
   const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   
   const form = useForm<FormValues>({
     defaultValues: {
@@ -38,6 +40,9 @@ const HealthQueryForm = ({ onQuerySubmitted }: HealthQueryFormProps) => {
   });
 
   const handleSubmit = async (values: FormValues) => {
+    // Clear any previous errors
+    setError(null);
+    
     if (!values.queryText.trim()) {
       toast.error('Please enter your health question');
       return;
@@ -52,6 +57,7 @@ const HealthQueryForm = ({ onQuerySubmitted }: HealthQueryFormProps) => {
     toast.info('Processing your health query with AI...');
     
     try {
+      console.log('Starting health query submission process');
       // Prepare patient data for the AI assessment
       const patientData = {
         symptoms: values.queryText,
@@ -61,6 +67,9 @@ const HealthQueryForm = ({ onQuerySubmitted }: HealthQueryFormProps) => {
         medicalHistory: values.medicalHistory || 'None provided'
       };
       
+      console.log('Prepared patient data:', patientData);
+      console.log('Calling health-assessment edge function');
+      
       // Call the Gemini-powered health assessment edge function
       const { data: aiData, error: aiError } = await supabase.functions.invoke('health-assessment', {
         body: { 
@@ -69,13 +78,23 @@ const HealthQueryForm = ({ onQuerySubmitted }: HealthQueryFormProps) => {
         }
       });
       
-      if (aiError) throw aiError;
+      if (aiError) {
+        console.error('Error from health-assessment function:', aiError);
+        throw new Error(`AI assessment failed: ${aiError.message}`);
+      }
+      
+      console.log('Received response from health-assessment function:', aiData ? 'Data received' : 'No data');
       
       if (!aiData) {
         throw new Error('No data returned from the health assessment');
       }
       
+      if (aiData.error) {
+        throw new Error(aiData.error);
+      }
+      
       // Save the query and AI assessment to the database
+      console.log('Saving health query to database');
       const { data: queryData, error: queryError } = await supabase
         .from('health_queries')
         .insert({
@@ -87,8 +106,12 @@ const HealthQueryForm = ({ onQuerySubmitted }: HealthQueryFormProps) => {
         .select()
         .single();
       
-      if (queryError) throw queryError;
+      if (queryError) {
+        console.error('Error saving query to database:', queryError);
+        throw queryError;
+      }
       
+      console.log('Health query saved successfully');
       toast.success('Your health query has been analyzed');
       form.reset();
       
@@ -98,8 +121,9 @@ const HealthQueryForm = ({ onQuerySubmitted }: HealthQueryFormProps) => {
         suggestedSpecialties: aiData.suggestedSpecialties,
         recommendedHospitals: aiData.recommendedHospitals
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error submitting health query:', error);
+      setError(error.message || 'Failed to process your health query');
       toast.error('Failed to process your health query. Please try again.');
     } finally {
       setIsLoading(false);
@@ -109,6 +133,14 @@ const HealthQueryForm = ({ onQuerySubmitted }: HealthQueryFormProps) => {
   return (
     <div className="glass-card p-6">
       <h2 className="text-xl font-semibold mb-4">Describe Your Health Concern</h2>
+      
+      {error && (
+        <Alert variant="destructive" className="mb-4">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+      
       <Form {...form}>
         <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
           <FormField
