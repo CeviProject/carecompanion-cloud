@@ -12,6 +12,8 @@ import DoctorDashboard from "./pages/dashboard/DoctorDashboard";
 import NotFound from "./pages/NotFound";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { Skeleton } from "./components/ui/skeleton";
+import About from "./pages/About";
+import Features from "./pages/Features";
 
 const queryClient = new QueryClient();
 
@@ -76,6 +78,8 @@ const AppWithAuth = () => (
   <AuthProvider>
     <Routes>
       <Route path="/" element={<Index />} />
+      <Route path="/about" element={<About />} />
+      <Route path="/features" element={<Features />} />
       <Route path="/auth/login" element={
         <PublicOnlyRoute>
           <Login />

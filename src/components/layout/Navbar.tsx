@@ -1,6 +1,6 @@
 
 import { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Menu, X, LogOut, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -8,7 +8,8 @@ import { useAuth } from '@/context/AuthContext';
 
 const Navbar = () => {
   const location = useLocation();
-  const { user, profile, signOut } = useAuth();
+  const navigate = useNavigate();
+  const { user, profile, signOut, isAuthenticated } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const isActive = (path: string) => {
@@ -19,9 +20,14 @@ const Navbar = () => {
     setIsMenuOpen(!isMenuOpen);
   };
 
-  const handleSignOut = async () => {
-    await signOut();
-    setIsMenuOpen(false);
+  const handleSignOut = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    try {
+      await signOut();
+      setIsMenuOpen(false);
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
   };
 
   return (
@@ -47,7 +53,7 @@ const Navbar = () => {
             >
               Home
             </Link>
-            {user && profile?.role === 'patient' && (
+            {isAuthenticated && profile?.role === 'patient' && (
               <Link 
                 to="/dashboard/patient" 
                 className={cn(
@@ -58,7 +64,7 @@ const Navbar = () => {
                 Dashboard
               </Link>
             )}
-            {user && profile?.role === 'doctor' && (
+            {isAuthenticated && profile?.role === 'doctor' && (
               <Link 
                 to="/dashboard/doctor" 
                 className={cn(
@@ -91,7 +97,7 @@ const Navbar = () => {
 
           {/* Authentication buttons */}
           <div className="hidden md:flex items-center space-x-4">
-            {user ? (
+            {isAuthenticated ? (
               <>
                 <div className="text-sm font-medium">
                   Hello, {profile?.first_name || 'User'}
@@ -150,7 +156,7 @@ const Navbar = () => {
             >
               Home
             </Link>
-            {user && profile?.role === 'patient' && (
+            {isAuthenticated && profile?.role === 'patient' && (
               <Link 
                 to="/dashboard/patient" 
                 className={cn(
@@ -162,7 +168,7 @@ const Navbar = () => {
                 Dashboard
               </Link>
             )}
-            {user && profile?.role === 'doctor' && (
+            {isAuthenticated && profile?.role === 'doctor' && (
               <Link 
                 to="/dashboard/doctor" 
                 className={cn(
@@ -197,7 +203,7 @@ const Navbar = () => {
           </div>
           <div className="pt-4 pb-3 border-t border-border">
             <div className="flex items-center px-5">
-              {user ? (
+              {isAuthenticated ? (
                 <div className="w-full space-y-2">
                   <div className="flex items-center">
                     <User className="h-5 w-5 mr-2" />
