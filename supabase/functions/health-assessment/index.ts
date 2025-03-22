@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
@@ -25,41 +24,12 @@ serve(async (req) => {
     
     console.log('Processing health query with patient data:', { healthQuery, patientData });
     
-    // Generate health assessment using Gemini API
-    const assessment = await generateGeminiAssessment(healthQuery, patientData);
-    
-    // Determine suggested specialties based on the assessment
-    const suggestedSpecialties = extractSuggestedSpecialties(assessment);
-    
-    // Extract recommended hospitals from the assessment
-    const recommendedHospitals = extractRecommendedHospitals(assessment);
-    
-    console.log('Assessment generated successfully with specialties and hospitals');
+    if (!GEMINI_API_KEY) {
+      throw new Error('GEMINI_API_KEY is not set in the environment variables');
+    }
 
-    return new Response(JSON.stringify({ 
-      assessment,
-      suggestedSpecialties,
-      recommendedHospitals
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  } catch (error) {
-    console.error('Error in health-assessment function:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  }
-});
-
-// Generate health assessment using Gemini API with patient data
-async function generateGeminiAssessment(healthQuery: string, patientData: any): Promise<string> {
-  if (!GEMINI_API_KEY) {
-    throw new Error('GEMINI_API_KEY is not set in the environment variables');
-  }
-
-  // Format patient data for the prompt
-  const patientDetails = `
+    // Format patient data for the prompt
+    const patientDetails = `
 Patient Details:
 - Age: ${patientData?.age || 'Not provided'}
 - Gender: ${patientData?.gender || 'Not provided'}
@@ -67,7 +37,7 @@ Patient Details:
 - Medical History: ${patientData?.medicalHistory || 'None provided'}
 `;
 
-  const prompt = `
+    const prompt = `
 As a healthcare AI assistant, provide a detailed assessment of the following health concerns for this patient:
 
 ${patientDetails}
@@ -97,7 +67,6 @@ Please include:
 Format your response in a helpful, clear manner that is informative but not alarming. Use bullet points where appropriate.
 `;
 
-  try {
     const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
       method: 'POST',
       headers: {
@@ -149,13 +118,29 @@ Format your response in a helpful, clear manner that is informative but not alar
     }
     
     // Extract text content from the response
-    const textContent = data.candidates[0].content.parts.map((part: any) => part.text).join('');
-    return textContent;
+    const assessment = data.candidates[0].content.parts.map((part: any) => part.text).join('');
+    
+    // Extract suggested specialties and recommended hospitals
+    const suggestedSpecialties = extractSuggestedSpecialties(assessment);
+    const recommendedHospitals = extractRecommendedHospitals(assessment);
+    
+    console.log('Assessment generated successfully with specialties and hospitals');
+
+    return new Response(JSON.stringify({ 
+      assessment,
+      suggestedSpecialties,
+      recommendedHospitals
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
   } catch (error) {
-    console.error('Error calling Gemini API:', error);
-    return `I'm sorry, I couldn't generate an assessment at this time. Please try again later. Error: ${error.message}`;
+    console.error('Error in health-assessment function:', error);
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
   }
-}
+});
 
 // Helper function to extract suggested specialties from assessment
 function extractSuggestedSpecialties(assessment: string): string[] {
@@ -202,7 +187,7 @@ function extractSuggestedSpecialties(assessment: string): string[] {
   return matchedSpecialties;
 }
 
-// Helper function to extract recommended hospitals from the assessment
+// Helper function to extract recommended hospitals from assessment
 function extractRecommendedHospitals(assessment: string): Array<{ name: string, address: string, specialty: string }> {
   const hospitals: Array<{ name: string, address: string, specialty: string }> = [];
   
