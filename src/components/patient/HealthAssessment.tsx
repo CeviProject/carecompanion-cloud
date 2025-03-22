@@ -10,17 +10,19 @@ interface Hospital {
 }
 
 interface HealthAssessmentProps {
-  assessment: string | null;
-  suggestedSpecialties: string[] | null;
+  assessment?: string | null;
+  suggestedSpecialties?: string[] | null;
   recommendedHospitals?: Hospital[] | null;
+  minimalView?: boolean;
 }
 
 const HealthAssessment = ({ 
   assessment, 
   suggestedSpecialties,
-  recommendedHospitals 
+  recommendedHospitals,
+  minimalView = false
 }: HealthAssessmentProps) => {
-  if (!assessment) return null;
+  if (!assessment && !minimalView) return null;
   
   // Helper function to format the assessment text
   const formatAssessment = (text: string) => {
@@ -45,6 +47,16 @@ const HealthAssessment = ({
     });
   };
   
+  if (minimalView) {
+    return (
+      <div className="text-center p-4">
+        <p className="text-sm text-muted-foreground">
+          Use the health query feature to get an AI-powered health assessment
+        </p>
+      </div>
+    );
+  }
+  
   return (
     <Card className="glass-card p-6 space-y-4">
       <div>
@@ -56,9 +68,11 @@ const HealthAssessment = ({
           This assessment is for informational purposes only and not a medical diagnosis.
         </p>
         
-        <div className="border-l-4 border-primary pl-4 py-2 overflow-auto max-h-[500px] pr-2">
-          {formatAssessment(assessment)}
-        </div>
+        {assessment && (
+          <div className="border-l-4 border-primary pl-4 py-2 overflow-auto max-h-[500px] pr-2">
+            {formatAssessment(assessment)}
+          </div>
+        )}
       </div>
       
       {suggestedSpecialties && suggestedSpecialties.length > 0 && (

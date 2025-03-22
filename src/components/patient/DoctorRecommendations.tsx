@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { Calendar, User, MapPin, BookOpen } from 'lucide-react';
 
 interface DoctorRecommendationsProps {
-  suggestedSpecialties: string[] | null;
+  suggestedSpecialties?: string[] | null;
 }
 
 interface DoctorProfile {
@@ -101,7 +101,14 @@ const DoctorRecommendations = ({ suggestedSpecialties }: DoctorRecommendationsPr
   };
 
   if (!suggestedSpecialties || suggestedSpecialties.length === 0) {
-    return null;
+    return (
+      <Card className="glass-card p-6">
+        <h2 className="text-xl font-semibold mb-4">Find Doctors</h2>
+        <p className="text-muted-foreground">
+          Submit a health query to get doctor recommendations based on your symptoms.
+        </p>
+      </Card>
+    );
   }
 
   return (

@@ -12,7 +12,7 @@ import { useForm } from 'react-hook-form';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface HealthQueryFormProps {
-  onQuerySubmitted: (queryData: any) => void;
+  onQuerySubmitted?: (queryData: any) => void;
 }
 
 interface FormValues {
@@ -39,7 +39,6 @@ const HealthQueryForm = ({ onQuerySubmitted }: HealthQueryFormProps) => {
   });
 
   const handleSubmit = async (values: FormValues) => {
-    // Clear any previous errors
     setError(null);
     
     if (!values.queryText.trim()) {
@@ -57,7 +56,6 @@ const HealthQueryForm = ({ onQuerySubmitted }: HealthQueryFormProps) => {
     
     try {
       console.log('Starting health query submission process');
-      // Prepare patient data for the AI assessment
       const patientData = {
         symptoms: values.queryText,
         age: values.age,
@@ -69,7 +67,6 @@ const HealthQueryForm = ({ onQuerySubmitted }: HealthQueryFormProps) => {
       console.log('Prepared patient data:', patientData);
       console.log('Calling health-assessment edge function');
       
-      // Call the Gemini-powered health assessment edge function
       const { data: aiData, error: aiError } = await supabase.functions.invoke('health-assessment', {
         body: { 
           healthQuery: values.queryText,
@@ -94,7 +91,6 @@ const HealthQueryForm = ({ onQuerySubmitted }: HealthQueryFormProps) => {
         throw new Error(aiData.error);
       }
       
-      // Save the query and AI assessment to the database
       console.log('Saving health query to database');
       const { data: queryData, error: queryError } = await supabase
         .from('health_queries')
@@ -116,12 +112,13 @@ const HealthQueryForm = ({ onQuerySubmitted }: HealthQueryFormProps) => {
       toast.success('Your health query has been analyzed');
       form.reset();
       
-      // Pass the query data, AI assessment, and suggested specialties to the parent component
-      onQuerySubmitted({
-        ...queryData,
-        suggestedSpecialties: aiData.suggestedSpecialties,
-        recommendedHospitals: aiData.recommendedHospitals
-      });
+      if (onQuerySubmitted) {
+        onQuerySubmitted({
+          ...queryData,
+          suggestedSpecialties: aiData.suggestedSpecialties,
+          recommendedHospitals: aiData.recommendedHospitals
+        });
+      }
     } catch (error: any) {
       console.error('Error submitting health query:', error);
       setError(error.message || 'Failed to process your health query');

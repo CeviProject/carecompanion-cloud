@@ -13,12 +13,22 @@ import HealthTips from '@/components/patient/HealthTips';
 import MedicationReminders from '@/components/patient/MedicationReminders';
 import { supabase } from '@/integrations/supabase/client';
 
+interface HealthQueryResult {
+  id: string;
+  query_text: string;
+  ai_assessment: string;
+  patient_data: any;
+  suggestedSpecialties: string[] | null;
+  recommendedHospitals: any[] | null;
+}
+
 const PatientDashboard = () => {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
   const [upcomingMedications, setUpcomingMedications] = useState<any[]>([]);
   const [upcomingAppointments, setUpcomingAppointments] = useState<any[]>([]);
+  const [healthQueryResult, setHealthQueryResult] = useState<HealthQueryResult | null>(null);
 
   // Fetch upcoming medications and appointments for overview
   React.useEffect(() => {
@@ -65,6 +75,13 @@ const PatientDashboard = () => {
     fetchOverviewData();
   }, [user]);
 
+  // Handle the submission of a health query
+  const handleQuerySubmitted = (queryData: HealthQueryResult) => {
+    setHealthQueryResult(queryData);
+    // Switch to the assessment tab after a query is submitted
+    setActiveTab('assessment');
+  };
+
   if (!user || !profile) {
     return (
       <div className="flex justify-center items-center h-[calc(100vh-64px)]">
@@ -93,11 +110,12 @@ const PatientDashboard = () => {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid grid-cols-3 lg:grid-cols-6 w-full">
+        <TabsList className="grid grid-cols-3 lg:grid-cols-7 w-full">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="appointments">Appointments</TabsTrigger>
           <TabsTrigger value="medications">Medications</TabsTrigger>
           <TabsTrigger value="health-query">Health Query</TabsTrigger>
+          <TabsTrigger value="assessment">Assessment</TabsTrigger>
           <TabsTrigger value="health-tips">Health Tips</TabsTrigger>
           <TabsTrigger value="doctors">Find Doctors</TabsTrigger>
         </TabsList>
@@ -199,7 +217,28 @@ const PatientDashboard = () => {
         <TabsContent value="health-query">
           <Card>
             <CardContent className="pt-6">
-              <HealthQueryForm />
+              <HealthQueryForm onQuerySubmitted={handleQuerySubmitted} />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="assessment">
+          <Card>
+            <CardContent className="pt-6">
+              {healthQueryResult ? (
+                <HealthAssessment 
+                  assessment={healthQueryResult.ai_assessment}
+                  suggestedSpecialties={healthQueryResult.suggestedSpecialties}
+                  recommendedHospitals={healthQueryResult.recommendedHospitals}
+                />
+              ) : (
+                <div className="text-center py-10">
+                  <p className="mb-4">You haven't submitted a health query yet.</p>
+                  <Button onClick={() => setActiveTab('health-query')}>
+                    Submit a health query now
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -215,7 +254,9 @@ const PatientDashboard = () => {
         <TabsContent value="doctors">
           <Card>
             <CardContent className="pt-6">
-              <DoctorRecommendations />
+              <DoctorRecommendations 
+                suggestedSpecialties={healthQueryResult?.suggestedSpecialties}
+              />
             </CardContent>
           </Card>
         </TabsContent>
