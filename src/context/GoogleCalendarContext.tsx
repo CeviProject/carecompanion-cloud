@@ -24,6 +24,8 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
   const { user } = useAuth();
   const [isEnabled, setIsEnabled] = useState(false);
   const [tokens, setTokens] = useState<GoogleCalendarTokens | null>(null);
+  const authWindowRef = React.useRef<Window | null>(null);
+  const authCheckIntervalRef = React.useRef<number | null>(null);
 
   useEffect(() => {
     // Check if Google Calendar is enabled
@@ -48,6 +50,14 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
     if (user) {
       fetchTokensFromDatabase();
     }
+
+    // Clean up interval on unmount
+    return () => {
+      if (authCheckIntervalRef.current) {
+        window.clearInterval(authCheckIntervalRef.current);
+        authCheckIntervalRef.current = null;
+      }
+    };
   }, [user]);
 
   const fetchTokensFromDatabase = async () => {
@@ -113,15 +123,30 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
       
       console.log('Received authorization URL:', data?.authUrl);
       
-      // Open the authorization URL in a new window
-      const authWindow = window.open(data.authUrl, 'googleAuthWindow', 'width=500,height=600');
+      // Close any existing auth window
+      if (authWindowRef.current && !authWindowRef.current.closed) {
+        authWindowRef.current.close();
+      }
       
-      if (!authWindow) {
+      // Clear any existing interval
+      if (authCheckIntervalRef.current) {
+        window.clearInterval(authCheckIntervalRef.current);
+        authCheckIntervalRef.current = null;
+      }
+      
+      // Open the authorization URL in a new window with noopener to prevent COOP issues
+      authWindowRef.current = window.open(
+        data.authUrl, 
+        'googleAuthWindow', 
+        'width=500,height=600,noopener,noreferrer'
+      );
+      
+      if (!authWindowRef.current) {
         toast.error('Popup blocked. Please allow popups for this site.');
         return;
       }
       
-      // Listen for the redirect back from Google with the authorization code
+      // Set up message listener
       const handleAuthCallback = async (event: MessageEvent) => {
         // Only process messages from our expected origin
         if (event.origin !== window.location.origin) return;
@@ -169,19 +194,44 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
           
           // Remove event listener
           window.removeEventListener('message', handleAuthCallback);
+          
+          // Clear check interval if it exists
+          if (authCheckIntervalRef.current) {
+            window.clearInterval(authCheckIntervalRef.current);
+            authCheckIntervalRef.current = null;
+          }
+        } else if (event.data && event.data.type === 'google_auth_error') {
+          console.error('Auth error from popup:', event.data.error, event.data.errorDescription);
+          toast.error(`Google Calendar connection failed: ${event.data.errorDescription || event.data.error || 'Unknown error'}`);
+          
+          // Remove event listener
+          window.removeEventListener('message', handleAuthCallback);
+          
+          // Clear check interval if it exists
+          if (authCheckIntervalRef.current) {
+            window.clearInterval(authCheckIntervalRef.current);
+            authCheckIntervalRef.current = null;
+          }
         }
       };
       
       // Add event listener for the callback
       window.addEventListener('message', handleAuthCallback);
       
-      // Clean up if the auth window is closed without completing
-      const checkClosed = setInterval(() => {
-        if (authWindow && authWindow.closed) {
-          clearInterval(checkClosed);
+      // Set up polling to check if the window is closed without completing
+      authCheckIntervalRef.current = window.setInterval(() => {
+        if (authWindowRef.current && authWindowRef.current.closed) {
+          console.log('Auth window was closed manually');
+          
+          // Clean up
           window.removeEventListener('message', handleAuthCallback);
+          window.clearInterval(authCheckIntervalRef.current!);
+          authCheckIntervalRef.current = null;
+          
+          // Notify user if needed
+          // We don't need to show an error here as the user may have just closed the window
         }
-      }, 1000);
+      }, 1000) as unknown as number;
       
     } catch (error) {
       console.error('Error authorizing Google Calendar:', error);

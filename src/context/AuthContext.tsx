@@ -101,6 +101,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     console.log('AuthProvider mounted, setting up auth state listener');
     setLoading(true);
+    isMounted.current = true;
     
     // Clean up any existing subscription first
     if (authSubscription.current) {
@@ -230,11 +231,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       // First clear local state to ensure immediate UI update
       clearAuthState();
       
-      // Force remove tokens from storage before calling signOut
+      // Force remove all tokens from storage before calling signOut
+      // This is a more aggressive approach to ensure we clear everything
+      Object.keys(localStorage).forEach(key => {
+        if (key.includes('supabase') || key.includes('sb-') || key.includes('auth')) {
+          console.log(`Removing storage key: ${key}`);
+          localStorage.removeItem(key);
+        }
+      });
+      
+      // Also explicitly remove the main auth token
       localStorage.removeItem('sb-irkihiedlszoufsjglhw-auth-token');
       
       // Then sign out from Supabase
-      const { error } = await supabase.auth.signOut();
+      const { error } = await supabase.auth.signOut({
+        scope: 'global' // Use global scope to sign out from all devices
+      });
       
       if (error) {
         console.error('Error during sign-out:', error);
@@ -243,12 +255,23 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       
       console.log('Successfully signed out from Supabase');
       
-      // Force a browser storage clear for all auth-related items
+      // Force a browser storage clear one more time for all auth-related items
       Object.keys(localStorage).forEach(key => {
-        if (key.includes('supabase.auth') || key.includes('sb-')) {
+        if (key.includes('supabase') || key.includes('sb-') || key.includes('auth')) {
           localStorage.removeItem(key);
         }
       });
+      
+      // Force reset the client
+      try {
+        // @ts-ignore - Access internal reset method
+        if (typeof supabase.auth._reset === 'function') {
+          // @ts-ignore
+          supabase.auth._reset();
+        }
+      } catch (e) {
+        console.error('Error resetting Supabase client:', e);
+      }
       
       // Force navigate to home page
       navigate('/', { replace: true });

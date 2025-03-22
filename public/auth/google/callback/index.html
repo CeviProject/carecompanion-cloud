@@ -99,6 +99,19 @@
     const error = urlParams.get('error');
     const errorDescription = urlParams.get('error_description');
     
+    // Function to safely communicate with the opener window
+    function postMessageToOpener(message) {
+      try {
+        if (window.opener && !window.opener.closed) {
+          window.opener.postMessage(message, window.location.origin);
+          return true;
+        }
+      } catch (e) {
+        console.error('Error posting message to opener:', e);
+      }
+      return false;
+    }
+    
     // Update status based on the callback results
     if (error) {
       document.getElementById('spinner').style.display = 'none';
@@ -111,47 +124,31 @@
         document.getElementById('verification-help').style.display = 'block';
       }
       
+      // Notify the opener about the error
+      const messageSent = postMessageToOpener({ 
+        type: 'google_auth_error',
+        error: error,
+        errorDescription: errorDescription
+      });
+      
       // Close window after a few seconds even in case of error
       setTimeout(() => {
-        if (window.opener) {
-          try {
-            window.opener.postMessage({ 
-              type: 'google_auth_error',
-              error: error,
-              errorDescription: errorDescription
-            }, window.location.origin);
-          } catch (e) {
-            console.error('Error posting error message to opener:', e);
-          }
-        }
+        window.close();
+      }, messageSent ? 2000 : 5000);
+    } else if (code && state === 'google_calendar_auth') {
+      // Try to send message to opener window
+      const messageSent = postMessageToOpener({ 
+        type: 'google_auth_callback',
+        code: code
+      });
+      
+      if (messageSent) {
+        document.getElementById('status').textContent = 'Authorization Successful!';
         
+        // Close the window automatically after a short delay
         setTimeout(() => {
           window.close();
-        }, 8000);
-      }, 2000);
-    } else if (code && state === 'google_calendar_auth') {
-      // Send message to opener window with the authorization code
-      if (window.opener && !window.opener.closed) {
-        try {
-          window.opener.postMessage({ 
-            type: 'google_auth_callback',
-            code: code
-          }, window.location.origin);
-          
-          document.getElementById('status').textContent = 'Authorization Successful!';
-          
-          // Close the window automatically after a short delay
-          setTimeout(() => {
-            window.close();
-          }, 2000);
-        } catch (e) {
-          document.getElementById('spinner').style.display = 'none';
-          document.getElementById('error-container').style.display = 'block';
-          document.getElementById('error-message').textContent = 'Failed to communicate with the main window.';
-          document.getElementById('status').textContent = 'Communication Error';
-          
-          console.error('Error posting message to opener:', e);
-        }
+        }, 2000);
       } else {
         document.getElementById('spinner').style.display = 'none';
         document.getElementById('status').textContent = 'Authorization Complete';
@@ -165,7 +162,7 @@
       document.getElementById('error-message').textContent = 'Invalid authorization response.';
       document.getElementById('status').textContent = 'Invalid Response';
       
-      // Close window after a few seconds even in case of error
+      // Close window after a few seconds
       setTimeout(() => {
         window.close();
       }, 5000);
