@@ -1,6 +1,6 @@
 
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Lock, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,6 +12,7 @@ import { useAuth } from '@/context/AuthContext';
 
 const Login = () => {
   const { signIn } = useAuth();
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -28,7 +29,8 @@ const Login = () => {
     
     try {
       await signIn(email, password);
-      // No need to navigate, AuthContext will handle it
+      // After successful login, redirect based on user role
+      navigate('/');
     } catch (error) {
       console.error('Login error:', error);
       // Error is already handled in the AuthContext

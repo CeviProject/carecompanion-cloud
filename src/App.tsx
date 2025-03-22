@@ -51,7 +51,7 @@ const ProtectedRoute = ({
 };
 
 // Public only route (not accessible when logged in)
-const PublicOnlyRoute = ({ children }: { children: React.ReactNode }) => {
+const PublicOnlyRoute = ({ children, redirectTo }: { children: React.ReactNode, redirectTo?: string }) => {
   const { loading, isAuthenticated, profile } = useAuth();
 
   if (loading) {
@@ -67,7 +67,8 @@ const PublicOnlyRoute = ({ children }: { children: React.ReactNode }) => {
   }
 
   if (isAuthenticated) {
-    return <Navigate to={`/dashboard/${profile?.role || 'patient'}`} replace />;
+    const defaultRedirect = `/dashboard/${profile?.role || 'patient'}`;
+    return <Navigate to={redirectTo || defaultRedirect} replace />;
   }
 
   return <>{children}</>;
