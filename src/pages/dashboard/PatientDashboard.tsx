@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -13,6 +14,7 @@ import MedicationReminders from '@/components/patient/MedicationReminders';
 import { supabase } from '@/integrations/supabase/client';
 import { Bell, Calendar, Pill, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
+import { Json } from '@/integrations/supabase/types';
 
 interface HealthQueryResult {
   id: string;
@@ -86,7 +88,17 @@ const PatientDashboard = () => {
           .single();
           
         if (!healthQueryError && healthQuery) {
-          setHealthQueryResult(healthQuery as HealthQueryResult);
+          // Process the result to match the expected HealthQueryResult type
+          // Extract suggestedSpecialties and recommendedHospitals from patient_data if available
+          const patientData = healthQuery.patient_data as Json;
+          
+          const processedQueryResult: HealthQueryResult = {
+            ...healthQuery as any,
+            suggestedSpecialties: patientData?.suggestedSpecialties ?? null,
+            recommendedHospitals: patientData?.recommendedHospitals ?? null
+          };
+          
+          setHealthQueryResult(processedQueryResult);
         }
       } catch (error) {
         console.error('Error fetching overview data:', error);
