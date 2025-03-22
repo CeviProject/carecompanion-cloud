@@ -377,47 +377,54 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
       toast.success('Appointment booked successfully!');
       form.reset();
       
-      const tokens = getGoogleCalendarTokens();
-      if (tokens?.access_token) {
-        try {
-          const doctor = doctors.find(d => d.id === values.doctor_id);
-          const doctorName = doctor ? 
-            `Dr. ${doctor.profiles.first_name} ${doctor.profiles.last_name}` : 
-            'Doctor';
-          
-          console.log('Adding appointment to Google Calendar');
-          await addToGoogleCalendar({
-            summary: `Medical Appointment with ${doctorName}`,
-            description: values.reason,
-            startTime: appointmentDate.toISOString(),
-            endTime: new Date(appointmentDate.getTime() + 30 * 60000).toISOString(),
-            accessToken: tokens.access_token
-          });
-          toast.success('Added to Google Calendar');
-        } catch (calendarError: any) {
-          console.error('Failed to add to Google Calendar:', calendarError);
-          
-          if (calendarError.message?.includes('401') && tokens.refresh_token) {
-            console.log('Token expired, attempting to refresh');
-            const newToken = await refreshGoogleToken(tokens.refresh_token);
-            if (newToken) {
-              try {
-                await addToGoogleCalendar({
-                  summary: `Medical Appointment`,
-                  description: values.reason,
-                  startTime: appointmentDate.toISOString(),
-                  endTime: new Date(appointmentDate.getTime() + 30 * 60000).toISOString(),
-                  accessToken: newToken
-                });
-                toast.success('Added to Google Calendar');
-              } catch (retryError) {
-                console.error('Failed to add to Google Calendar after token refresh:', retryError);
-                toast.error('Failed to add to Google Calendar');
+      const isGoogleCalendarEnabled = localStorage.getItem('googleCalendarEnabled') === 'true';
+      if (isGoogleCalendarEnabled) {
+        const tokens = getGoogleCalendarTokens();
+        if (tokens?.access_token) {
+          try {
+            const doctor = doctors.find(d => d.id === values.doctor_id);
+            const doctorName = doctor ? 
+              `Dr. ${doctor.profiles.first_name} ${doctor.profiles.last_name}` : 
+              'Doctor';
+            
+            console.log('Adding appointment to Google Calendar');
+            await addToGoogleCalendar({
+              summary: `Medical Appointment with ${doctorName}`,
+              description: values.reason,
+              startTime: appointmentDate.toISOString(),
+              endTime: new Date(appointmentDate.getTime() + 30 * 60000).toISOString(),
+              accessToken: tokens.access_token
+            });
+            toast.success('Added to Google Calendar');
+          } catch (calendarError: any) {
+            console.error('Failed to add to Google Calendar:', calendarError);
+            
+            if ((calendarError.message?.includes('401') || calendarError.message?.includes('invalid_token')) && tokens.refresh_token) {
+              console.log('Token expired, attempting to refresh');
+              const newToken = await refreshGoogleToken(tokens.refresh_token);
+              if (newToken) {
+                try {
+                  await addToGoogleCalendar({
+                    summary: `Medical Appointment`,
+                    description: values.reason,
+                    startTime: appointmentDate.toISOString(),
+                    endTime: new Date(appointmentDate.getTime() + 30 * 60000).toISOString(),
+                    accessToken: newToken
+                  });
+                  toast.success('Added to Google Calendar');
+                } catch (retryError) {
+                  console.error('Failed to add to Google Calendar after token refresh:', retryError);
+                  toast.error('Failed to add to Google Calendar');
+                }
+              } else {
+                toast.error('Failed to refresh Google Calendar access. Please reconnect.');
               }
+            } else {
+              toast.error('Failed to add to Google Calendar');
             }
-          } else {
-            toast.error('Failed to add to Google Calendar');
           }
+        } else {
+          toast.warning('Google Calendar is enabled but no access token found. Please reconnect.');
         }
       }
       
@@ -523,25 +530,32 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
       
       const response = await supabase.functions.invoke('google-calendar-event', {
         body: { 
+          action: 'create',
           event: {
             summary: event.summary,
             description: event.description,
             startTime: event.startTime,
             endTime: event.endTime
           }, 
-          accessToken: event.accessToken,
-          action: 'create'
+          accessToken: event.accessToken
         }
       });
       
       if (response.error) {
-        console.error('Error adding to calendar:', response.error);
+        console.error('Error invoking Google Calendar function:', response.error);
         throw new Error(response.error.message);
+      }
+      
+      console.log('Response from Google Calendar function:', response.data);
+      
+      if (!response.data || !response.data.success) {
+        console.error('Error from Google Calendar function:', response.data?.error || 'Unknown error');
+        throw new Error(response.data?.error || 'Failed to create calendar event');
       }
       
       console.log('Event created successfully:', response.data);
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error adding to Google Calendar:', error);
       throw error;
     }

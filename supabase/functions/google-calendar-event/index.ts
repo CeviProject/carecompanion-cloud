@@ -153,7 +153,7 @@ serve(async (req) => {
       const { event, accessToken } = data;
       
       if (!event || !event.summary || !event.startTime || !event.endTime) {
-        console.error('Invalid event data:', event);
+        console.error('Invalid event data:', JSON.stringify(event, null, 2));
         throw new Error('Invalid event data. Required fields: summary, startTime, endTime');
       }
 
@@ -203,31 +203,38 @@ serve(async (req) => {
         body: calendarEvent
       }, null, 2));
       
-      const response = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(calendarEvent),
-      });
-      
-      if (!response.ok) {
-        const error = await response.text();
-        console.error('Google Calendar API error:', error);
-        throw new Error(`Google Calendar API error: ${error}`);
+      try {
+        const response = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(calendarEvent),
+        });
+        
+        const responseText = await response.text();
+        console.log('Google Calendar API response:', responseText);
+        
+        if (!response.ok) {
+          console.error('Google Calendar API error:', responseText);
+          throw new Error(`Google Calendar API error: ${responseText}`);
+        }
+        
+        const responseData = JSON.parse(responseText);
+        console.log('Event created successfully:', responseData.id);
+        
+        return new Response(JSON.stringify({ 
+          success: true,
+          eventId: responseData.id,
+          htmlLink: responseData.htmlLink
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      } catch (error) {
+        console.error('Error creating calendar event:', error);
+        throw new Error(`Error creating calendar event: ${error.message}`);
       }
-      
-      const responseData = await response.json();
-      console.log('Event created successfully:', responseData.id);
-      
-      return new Response(JSON.stringify({ 
-        success: true,
-        eventId: responseData.id,
-        htmlLink: responseData.htmlLink
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
     }
     
     // If no valid action is matched

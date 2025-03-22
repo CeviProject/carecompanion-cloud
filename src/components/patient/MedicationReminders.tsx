@@ -232,12 +232,18 @@ const MedicationReminders = () => {
       if (error) throw error;
 
       // Add to Google Calendar if integration is enabled
-      try {
-        await addToGoogleCalendar(data as Medication);
-      } catch (calendarError) {
-        console.error('Failed to add to Google Calendar:', calendarError);
-        // Don't stop the flow, just notify the user
-        toast.error('Medication saved but could not add to Google Calendar');
+      const isGoogleCalendarEnabled = localStorage.getItem('googleCalendarEnabled') === 'true';
+      if (isGoogleCalendarEnabled) {
+        try {
+          await addToGoogleCalendar(data as Medication);
+          toast.success('Medication saved and added to Google Calendar');
+        } catch (calendarError: any) {
+          console.error('Failed to add to Google Calendar:', calendarError);
+          // Don't stop the flow, just notify the user
+          toast.error('Medication saved but could not add to Google Calendar');
+        }
+      } else {
+        toast.success('Medication saved successfully');
       }
       
       // Reset form and close dialog
@@ -265,6 +271,28 @@ const MedicationReminders = () => {
 
   const addToGoogleCalendar = async (medication: Medication) => {
     try {
+      // Check if Google Calendar integration is enabled
+      const isGoogleCalendarEnabled = localStorage.getItem('googleCalendarEnabled') === 'true';
+      if (!isGoogleCalendarEnabled) {
+        console.log('Google Calendar integration is not enabled, skipping');
+        return null;
+      }
+      
+      // Get stored tokens
+      const tokensStr = localStorage.getItem('googleCalendarTokens');
+      if (!tokensStr) {
+        console.log('No Google Calendar tokens found');
+        toast.error('Google Calendar integration is enabled but no access tokens found');
+        return null;
+      }
+      
+      const tokens = JSON.parse(tokensStr);
+      if (!tokens.access_token) {
+        console.log('No access token found in stored tokens');
+        toast.error('Invalid Google Calendar tokens');
+        return null;
+      }
+      
       // Create event details
       const eventDetails = {
         summary: `Take ${medication.name} ${medication.dosage}`,
@@ -272,30 +300,92 @@ const MedicationReminders = () => {
         startTime: combineDateTime(new Date(medication.start_date), medication.time),
         endTime: addMinutes(combineDateTime(new Date(medication.start_date), medication.time), 15),
         frequency: medication.frequency,
-        endDate: medication.end_date ? new Date(medication.end_date) : null
+        endDate: medication.end_date ? medication.end_date : null
       };
+
+      console.log('Sending to the edge function:', { 
+        action: 'create',
+        event: eventDetails,
+        accessToken: tokens.access_token 
+      });
 
       // Send to the edge function
       const { data, error } = await supabase.functions.invoke('google-calendar-event', {
-        body: { event: eventDetails }
+        body: { 
+          action: 'create',
+          event: eventDetails,
+          accessToken: tokens.access_token 
+        }
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error invoking Google Calendar function:', error);
+        throw error;
+      }
       
-      if (!data.success) throw new Error(data.message);
+      if (!data.success) {
+        console.error('Error from Google Calendar function:', data.error);
+        throw new Error(data.error || 'Unknown error adding to Google Calendar');
+      }
       
-      // In a real implementation, you would store the Google Calendar event ID 
-      // to allow updates/deletion later
       console.log('Added to Google Calendar:', data);
       
       return data;
     } catch (error: any) {
       console.error('Error adding to Google Calendar:', error);
+      // Try refreshing the token if we get an authentication error
+      if (error.message && (error.message.includes('401') || error.message.includes('invalid_token'))) {
+        try {
+          await refreshGoogleToken();
+          // We don't retry here to avoid potential infinite loops
+          toast.error('Google Calendar token expired. Please try again.');
+        } catch (refreshError) {
+          console.error('Error refreshing token:', refreshError);
+        }
+      }
       throw error;
     }
   };
 
-  // Helper function to combine a date and time string
+  const refreshGoogleToken = async () => {
+    try {
+      const tokensStr = localStorage.getItem('googleCalendarTokens');
+      if (!tokensStr) return null;
+      
+      const tokens = JSON.parse(tokensStr);
+      if (!tokens.refresh_token) return null;
+      
+      const { data, error } = await supabase.functions.invoke('google-calendar-event', {
+        body: { 
+          action: 'refresh',
+          refresh_token: tokens.refresh_token 
+        }
+      });
+      
+      if (error) throw error;
+      
+      if (data.access_token) {
+        const updatedTokens = {
+          ...tokens,
+          access_token: data.access_token,
+          expires_in: data.expires_in,
+          expires_at: Date.now() + (data.expires_in * 1000)
+        };
+        
+        localStorage.setItem('googleCalendarTokens', JSON.stringify(updatedTokens));
+        return data.access_token;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error refreshing Google token:', error);
+      localStorage.removeItem('googleCalendarTokens');
+      localStorage.setItem('googleCalendarEnabled', 'false');
+      toast.error('Failed to refresh Google Calendar access. Please reconnect.');
+      return null;
+    }
+  };
+
   const combineDateTime = (date: Date, timeStr: string) => {
     const [hours, minutes] = timeStr.split(':').map(Number);
     const combined = new Date(date);
@@ -303,7 +393,6 @@ const MedicationReminders = () => {
     return combined.toISOString();
   };
 
-  // Helper function to add minutes to a date
   const addMinutes = (dateStr: string, minutes: number) => {
     const date = new Date(dateStr);
     date.setMinutes(date.getMinutes() + minutes);
@@ -598,3 +687,4 @@ const formatDate = (dateString: string): string => {
 };
 
 export default MedicationReminders;
+
