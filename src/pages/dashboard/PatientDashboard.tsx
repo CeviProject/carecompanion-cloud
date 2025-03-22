@@ -92,10 +92,13 @@ const PatientDashboard = () => {
           // Extract suggestedSpecialties and recommendedHospitals from patient_data if available
           const patientData = healthQuery.patient_data as Json;
           
+          // Safely access nested properties by first casting to unknown then to a record
+          const patientDataObj = patientData as unknown as Record<string, any>;
+          
           const processedQueryResult: HealthQueryResult = {
             ...healthQuery as any,
-            suggestedSpecialties: patientData?.suggestedSpecialties ?? null,
-            recommendedHospitals: patientData?.recommendedHospitals ?? null
+            suggestedSpecialties: patientDataObj?.suggestedSpecialties ?? null,
+            recommendedHospitals: patientDataObj?.recommendedHospitals ?? null
           };
           
           setHealthQueryResult(processedQueryResult);
