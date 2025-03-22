@@ -60,6 +60,18 @@
       padding: 1rem;
       margin-bottom: 1rem;
     }
+    .help-text {
+      font-size: 0.85rem;
+      color: #666;
+      background-color: #f8f9fa;
+      border-radius: 8px;
+      padding: 1rem;
+      margin-top: 1rem;
+    }
+    .help-text h3 {
+      margin-top: 0;
+      margin-bottom: 0.5rem;
+    }
   </style>
 </head>
 <body>
@@ -71,6 +83,12 @@
       <p id="error-message">An error occurred</p>
     </div>
     <p>You will be redirected back to the application automatically.</p>
+    
+    <div id="verification-help" class="help-text" style="display: none;">
+      <h3>Google Verification Required</h3>
+      <p>This application is in testing mode and requires Google verification or test user access.</p>
+      <p>Please use email/password login instead, or contact the developer to be added as a test user.</p>
+    </div>
   </div>
   
   <script>
@@ -88,10 +106,29 @@
       document.getElementById('error-message').textContent = errorDescription || error;
       document.getElementById('status').textContent = 'Authorization Failed';
       
+      // Check for Google verification error
+      if (error === 'access_denied' || (errorDescription && errorDescription.includes('verification'))) {
+        document.getElementById('verification-help').style.display = 'block';
+      }
+      
       // Close window after a few seconds even in case of error
       setTimeout(() => {
-        window.close();
-      }, 5000);
+        if (window.opener) {
+          try {
+            window.opener.postMessage({ 
+              type: 'google_auth_error',
+              error: error,
+              errorDescription: errorDescription
+            }, window.location.origin);
+          } catch (e) {
+            console.error('Error posting error message to opener:', e);
+          }
+        }
+        
+        setTimeout(() => {
+          window.close();
+        }, 8000);
+      }, 2000);
     } else if (code && state === 'google_calendar_auth') {
       // Send message to opener window with the authorization code
       if (window.opener && !window.opener.closed) {

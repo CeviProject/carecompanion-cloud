@@ -1,7 +1,7 @@
 
 import { useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
-import { Lock, Mail } from 'lucide-react';
+import { Lock, Mail, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,12 +9,14 @@ import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 const Login = () => {
   const { signIn, loading: authLoading, isAuthenticated, profile } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [showGoogleAlert, setShowGoogleAlert] = useState(false);
 
   // If user is already authenticated, redirect to dashboard
   if (!authLoading && isAuthenticated && profile) {
@@ -42,6 +44,11 @@ const Login = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Function to display Google OAuth test mode info
+  const handleGoogleInfoClick = () => {
+    setShowGoogleAlert(!showGoogleAlert);
   };
 
   return (
@@ -109,6 +116,27 @@ const Login = () => {
                 {isLoading ? 'Signing in...' : 'Sign In'}
               </Button>
             </form>
+            
+            {/* Google OAuth info alert */}
+            <div className="mt-4">
+              <button 
+                type="button"
+                onClick={handleGoogleInfoClick}
+                className="text-xs flex items-center gap-1 text-amber-600 hover:text-amber-700"
+              >
+                <AlertCircle className="h-3 w-3" />
+                Having trouble with Google sign-in?
+              </button>
+              
+              {showGoogleAlert && (
+                <Alert variant="destructive" className="mt-2 bg-amber-50 text-amber-800 border-amber-200">
+                  <AlertDescription className="text-xs">
+                    Google OAuth is in test mode. For security reasons, Google only allows developer-approved test users
+                    to access the application. Please use email/password login instead, or contact the developer to be added as a test user.
+                  </AlertDescription>
+                </Alert>
+              )}
+            </div>
             
             <div className="mt-6 text-center">
               <p className="text-sm text-muted-foreground">
