@@ -12,6 +12,9 @@ const Navbar = () => {
   const { user, profile, signOut, isAuthenticated } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
+  // Don't show the main navbar on patient dashboard pages
+  const isPatientPage = location.pathname.startsWith('/patient/');
+  
   const isActive = (path: string) => {
     return location.pathname === path;
   };
@@ -34,6 +37,11 @@ const Navbar = () => {
     navigate(path);
     setIsMenuOpen(false);
   };
+
+  // Don't render on patient dashboard pages
+  if (isPatientPage) {
+    return null;
+  }
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
@@ -60,10 +68,10 @@ const Navbar = () => {
             </Link>
             {isAuthenticated && profile?.role === 'patient' && (
               <Link 
-                to="/dashboard/patient" 
+                to="/patient/overview" 
                 className={cn(
                   "text-sm font-medium transition-colors hover:text-primary",
-                  isActive("/dashboard/patient") ? "text-primary" : "text-foreground/80"
+                  isActive("/patient/overview") ? "text-primary" : "text-foreground/80"
                 )}
               >
                 Dashboard
@@ -162,10 +170,10 @@ const Navbar = () => {
             </button>
             {isAuthenticated && profile?.role === 'patient' && (
               <button 
-                onClick={() => handleNavigation("/dashboard/patient")}
+                onClick={() => handleNavigation("/patient/overview")}
                 className={cn(
                   "block w-full text-left px-3 py-2 rounded-md text-base font-medium focus-ring",
-                  isActive("/dashboard/patient") ? "text-primary" : "text-foreground/80 hover:text-primary"
+                  isActive("/patient/overview") ? "text-primary" : "text-foreground/80 hover:text-primary"
                 )}
               >
                 Dashboard

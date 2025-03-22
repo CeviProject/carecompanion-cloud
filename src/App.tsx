@@ -17,6 +17,15 @@ import About from "./pages/About";
 import Features from "./pages/Features";
 import { useEffect } from "react";
 
+// Patient pages
+import PatientOverview from "./pages/patient/Overview";
+import PatientAppointments from "./pages/patient/Appointments";
+import PatientMedications from "./pages/patient/Medications";
+import PatientHealthQuery from "./pages/patient/HealthQuery";
+import PatientAssessment from "./pages/patient/Assessment";
+import PatientHealthTips from "./pages/patient/HealthTips";
+import PatientDoctors from "./pages/patient/Doctors";
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -132,9 +141,11 @@ const AppWithAuth = () => (
             <Register />
           </PublicOnlyRoute>
         } />
+        
+        {/* Legacy dashboard routes for compatibility */}
         <Route path="/dashboard/patient" element={
           <ProtectedRoute requiredRole="patient">
-            <PatientDashboard />
+            <Navigate to="/patient/overview" replace />
           </ProtectedRoute>
         } />
         <Route path="/dashboard/doctor" element={
@@ -142,6 +153,44 @@ const AppWithAuth = () => (
             <DoctorDashboard />
           </ProtectedRoute>
         } />
+        
+        {/* New patient routes */}
+        <Route path="/patient/overview" element={
+          <ProtectedRoute requiredRole="patient">
+            <PatientOverview />
+          </ProtectedRoute>
+        } />
+        <Route path="/patient/appointments" element={
+          <ProtectedRoute requiredRole="patient">
+            <PatientAppointments />
+          </ProtectedRoute>
+        } />
+        <Route path="/patient/medications" element={
+          <ProtectedRoute requiredRole="patient">
+            <PatientMedications />
+          </ProtectedRoute>
+        } />
+        <Route path="/patient/health-query" element={
+          <ProtectedRoute requiredRole="patient">
+            <PatientHealthQuery />
+          </ProtectedRoute>
+        } />
+        <Route path="/patient/assessment" element={
+          <ProtectedRoute requiredRole="patient">
+            <PatientAssessment />
+          </ProtectedRoute>
+        } />
+        <Route path="/patient/health-tips" element={
+          <ProtectedRoute requiredRole="patient">
+            <PatientHealthTips />
+          </ProtectedRoute>
+        } />
+        <Route path="/patient/doctors" element={
+          <ProtectedRoute requiredRole="patient">
+            <PatientDoctors />
+          </ProtectedRoute>
+        } />
+        
         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
         <Route path="*" element={<NotFound />} />
       </Routes>
