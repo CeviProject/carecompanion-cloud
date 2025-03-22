@@ -4,7 +4,6 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 const GOOGLE_CLIENT_ID = Deno.env.get('GOOGLE_CLIENT_ID');
 const GOOGLE_CLIENT_SECRET = Deno.env.get('GOOGLE_CLIENT_SECRET');
 // This should match exactly what you configured in Google Cloud Console
-// The default is http://localhost:3000/auth/google/callback
 const REDIRECT_URI = Deno.env.get('REDIRECT_URI') || 'http://localhost:3000/auth/google/callback';
 
 const corsHeaders = {
@@ -175,7 +174,8 @@ serve(async (req) => {
                   expires_at: new Date(Date.now() + (tokenData.expires_in * 1000)).toISOString(),
                   created_at: new Date().toISOString(),
                   updated_at: new Date().toISOString()
-                }, { onConflict: 'user_id,provider' });
+                }, { onConflict: 'user_id,provider' })
+                .select();
               
               if (insertError) {
                 console.error('Error storing tokens in database:', insertError);
@@ -727,3 +727,4 @@ function createRecurrenceRule(frequency: string, endDate: string | null): string
   
   return rule;
 }
+

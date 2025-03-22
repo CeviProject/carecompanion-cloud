@@ -1,0 +1,35 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Google Auth Callback</title>
+</head>
+<body>
+  <h1>Authorization Successful!</h1>
+  <p>You can close this window now and return to the application.</p>
+  
+  <script>
+    // Parse the URL to get the code
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('code');
+    const state = urlParams.get('state');
+    
+    // Post message to parent window with the code
+    if (code && state === 'google_calendar_auth') {
+      window.opener.postMessage({ 
+        type: 'google_auth_callback',
+        code: code
+      }, window.location.origin);
+      
+      // Close the window automatically after 2 seconds
+      setTimeout(() => {
+        window.close();
+      }, 2000);
+    } else {
+      document.body.innerHTML = '<h1>Error</h1><p>Invalid authorization response.</p>';
+    }
+  </script>
+</body>
+</html>

@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
-import { PlusCircle, Calendar as CalendarIcon, Clock, Pill, Trash2, Check, Sync } from "lucide-react";
+import { PlusCircle, Calendar as CalendarIcon, Clock, Pill, Trash2, Check, RefreshCw } from "lucide-react";
 import { format, addDays, isToday } from 'date-fns';
 import { cn } from "@/lib/utils";
 import { supabase } from '@/integrations/supabase/client';
@@ -16,7 +16,6 @@ import { useAuth } from '@/context/AuthContext';
 import { useGoogleCalendar } from '@/context/GoogleCalendarContext';
 import { toast } from 'sonner';
 
-// Define TypeScript interface for medication
 interface Medication {
   id: string;
   user_id: string;
@@ -62,7 +61,6 @@ const MedicationReminders = () => {
     if (user) {
       fetchMedications();
       
-      // Set up real-time subscription for medications
       const channel = supabase
         .channel('medications-changes')
         .on(
@@ -97,19 +95,16 @@ const MedicationReminders = () => {
     }
   }, [user]);
 
-  // Set up notification checks for today's medications
   useEffect(() => {
     if (medications.length > 0) {
       const todayMeds = filterTodaysMedications(medications);
       setTodaysMedications(todayMeds);
       
-      // If we have medications due today, set up reminders
       if (todayMeds.length > 0) {
         const checkInterval = setInterval(() => {
           checkMedicationReminders(todayMeds);
-        }, 60000); // Check every minute
+        }, 60000);
         
-        // Initial check
         checkMedicationReminders(todayMeds);
         
         return () => clearInterval(checkInterval);
@@ -169,13 +164,11 @@ const MedicationReminders = () => {
     todayMeds.forEach(med => {
       const [medHour, medMinute] = med.time.split(':').map(Number);
       
-      // If it's time for this medication (within a 5-minute window)
       if (currentHour === medHour && Math.abs(currentMinute - medMinute) <= 5) {
-        // Show a toast notification
         toast.warning(
           `Time to take ${med.name} (${med.dosage})`,
           {
-            duration: 10000, // Long duration
+            duration: 10000,
             action: {
               label: "Dismiss",
               onClick: () => {}
@@ -183,7 +176,6 @@ const MedicationReminders = () => {
           }
         );
         
-        // Send an email notification
         sendMedicationReminder(med);
       }
     });
@@ -236,7 +228,6 @@ const MedicationReminders = () => {
 
       toast.success('Medication saved successfully');
       
-      // Reset form and close dialog
       resetForm();
       setIsAddDialogOpen(false);
     } catch (error: any) {
@@ -281,20 +272,29 @@ const MedicationReminders = () => {
         return;
       }
 
-      // Create batch request to sync all medications
-      const requests = medications.map(med => syncMedicationToCalendar(med, accessToken));
-      const results = await Promise.allSettled(requests);
+      const { data, error } = await supabase.functions.invoke('google-calendar-event', {
+        body: { 
+          action: 'sync_all_medications',
+          userId: user?.id,
+          accessToken,
+          medications
+        }
+      });
 
-      // Count successes and failures
-      const successful = results.filter(r => r.status === 'fulfilled').length;
-      const failed = results.filter(r => r.status === 'rejected').length;
+      if (error) {
+        console.error('Error in sync_all_medications request:', error);
+        toast.error(`Failed to sync: ${error.message}`);
+        return;
+      }
 
-      if (failed === 0) {
-        toast.success(`Successfully synced ${successful} medications to Google Calendar`);
-      } else if (successful === 0) {
-        toast.error('Failed to sync medications to Google Calendar');
+      console.log('Sync response:', data);
+      
+      if (data.success) {
+        toast.success(`Successfully synced ${data.results?.successful || 0} medications to Google Calendar`);
+      } else if (data.results?.failed > 0 && data.results?.successful > 0) {
+        toast.warning(`Synced ${data.results.successful} medications, ${data.results.failed} failed`);
       } else {
-        toast.warning(`Synced ${successful} medications, ${failed} failed`);
+        toast.error('Failed to sync medications to Google Calendar');
       }
     } catch (error: any) {
       console.error('Error syncing with Google Calendar:', error);
@@ -305,7 +305,6 @@ const MedicationReminders = () => {
   };
 
   const syncMedicationToCalendar = async (medication: Medication, accessToken: string) => {
-    // Create event details
     const eventDetails = {
       summary: `Take ${medication.name} ${medication.dosage}`,
       description: medication.notes || `Remember to take your ${medication.name}. Dosage: ${medication.dosage}`,
@@ -315,7 +314,6 @@ const MedicationReminders = () => {
       endDate: medication.end_date
     };
 
-    // Send to the edge function
     const { data, error } = await supabase.functions.invoke('google-calendar-event', {
       body: { 
         action: 'create',
@@ -367,7 +365,7 @@ const MedicationReminders = () => {
             onClick={syncWithGoogleCalendar} 
             disabled={isSyncingCalendar}
           >
-            <Sync className={cn("mr-2 h-4 w-4", isSyncingCalendar && "animate-spin")} />
+            <RefreshCw className={cn("mr-2 h-4 w-4", isSyncingCalendar && "animate-spin")} />
             {isSyncingCalendar ? 'Syncing...' : 'Sync to Google Calendar'}
           </Button>
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
@@ -544,8 +542,6 @@ const MedicationReminders = () => {
         </div>
       </div>
 
-      
-      
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {[1, 2].map(i => (
@@ -630,7 +626,6 @@ const MedicationReminders = () => {
   );
 };
 
-// Helper function to format time from 24h to 12h format
 const formatTime = (time: string): string => {
   const [hours, minutes] = time.split(':');
   const hour = parseInt(hours, 10);
@@ -639,7 +634,6 @@ const formatTime = (time: string): string => {
   return `${hour12}:${minutes} ${meridiem}`;
 };
 
-// Helper function to format date
 const formatDate = (dateString: string): string => {
   return format(new Date(dateString), 'MMM d, yyyy');
 };

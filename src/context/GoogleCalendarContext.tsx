@@ -69,7 +69,7 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
       
       console.log('Tokens response from database:', data);
       
-      if (data && data.access_token) {
+      if (data && data.found && data.access_token) {
         const newTokens = {
           access_token: data.access_token,
           refresh_token: data.refresh_token,
@@ -84,6 +84,13 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
         // Update localStorage
         localStorage.setItem('googleCalendarTokens', JSON.stringify(newTokens));
         localStorage.setItem('googleCalendarEnabled', 'true');
+      } else if (data && !data.found) {
+        console.log('No Google Calendar tokens found for this user');
+        // Clear any stale token data
+        setTokens(null);
+        setIsEnabled(false);
+        localStorage.removeItem('googleCalendarTokens');
+        localStorage.setItem('googleCalendarEnabled', 'false');
       }
     } catch (error) {
       console.error('Error fetching Google Calendar tokens:', error);
@@ -277,7 +284,7 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
         
         console.log('Database tokens response:', data);
         
-        if (data.access_token) {
+        if (data.found && data.access_token) {
           const newTokens = {
             access_token: data.access_token,
             refresh_token: data.refresh_token,
@@ -294,9 +301,16 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
           localStorage.setItem('googleCalendarEnabled', 'true');
           
           return data.access_token;
+        } else {
+          // If no tokens were found, we need to authorize
+          console.log('No tokens found in the database, need to authorize');
+          toast.info('Please connect your Google Calendar to continue');
+          setIsEnabled(false);
+          return null;
         }
       } catch (error) {
         console.error('Error fetching tokens from database:', error);
+        toast.error('Error connecting to Google Calendar. Please try again.');
       }
     }
     
