@@ -1,56 +1,25 @@
 
-import { useState, useEffect } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
-import { useAuth } from '@/context/AuthContext';
+import React, { useState, useEffect } from 'react';
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Textarea } from "@/components/ui/textarea";
+import { PlusCircle, Calendar as CalendarIcon, Clock, Pill, AlertTriangle, Check, Trash2 } from "lucide-react";
+import { format, addDays } from 'date-fns';
+import { cn } from "@/lib/utils";
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
-import { format } from 'date-fns';
-import { Pill, Calendar, Clock, Trash2 } from 'lucide-react';
 
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
-
-const formSchema = z.object({
-  name: z.string().min(2, "Medication name must be at least 2 characters"),
-  dosage: z.string().min(1, "Dosage is required"),
-  frequency: z.string({
-    required_error: "Please select frequency",
-  }),
-  time: z.string({
-    required_error: "Please specify time",
-  }),
-  start_date: z.date({
-    required_error: "Start date is required",
-  }),
-  end_date: z.date().optional(),
-  notes: z.string().optional(),
-});
-
+// Define TypeScript interface for medication
 interface Medication {
   id: string;
+  user_id: string;
   name: string;
   dosage: string;
   frequency: string;
@@ -61,18 +30,30 @@ interface Medication {
   created_at: string;
 }
 
+const FREQUENCY_OPTIONS = [
+  { value: 'daily', label: 'Daily' },
+  { value: 'twice_daily', label: 'Twice Daily' },
+  { value: 'three_times_daily', label: 'Three Times Daily' },
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'as_needed', label: 'As Needed' },
+];
+
 const MedicationReminders = () => {
   const { user } = useAuth();
   const [medications, setMedications] = useState<Medication[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [fetchingMeds, setFetchingMeds] = useState(true);
-
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      notes: "",
-    },
+  const [isLoading, setIsLoading] = useState(true);
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [newMedication, setNewMedication] = useState({
+    name: '',
+    dosage: '',
+    frequency: 'daily',
+    time: '08:00',
+    start_date: new Date(),
+    end_date: null as Date | null,
+    notes: ''
   });
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [isEndDateCalendarOpen, setIsEndDateCalendarOpen] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -81,384 +62,421 @@ const MedicationReminders = () => {
   }, [user]);
 
   const fetchMedications = async () => {
-    if (!user) return;
-    
     try {
+      setIsLoading(true);
       const { data, error } = await supabase
         .from('medications')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', user?.id)
         .order('created_at', { ascending: false });
-      
+
       if (error) throw error;
       
-      setMedications(data || []);
-    } catch (error) {
+      setMedications(data as Medication[]);
+    } catch (error: any) {
       console.error('Error fetching medications:', error);
-      toast.error('Failed to load medications');
+      toast.error(`Failed to load medications: ${error.message}`);
     } finally {
-      setFetchingMeds(false);
+      setIsLoading(false);
     }
   };
 
-  const addToGoogleCalendar = async (medication: Medication) => {
+  const handleAddMedication = async () => {
     try {
-      // Format calendar event based on medication frequency
-      const startDate = new Date(medication.start_date);
-      const endDate = medication.end_date ? new Date(medication.end_date) : null;
-      
-      const [hours, minutes] = medication.time.split(':');
-      startDate.setHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0);
-      
-      let recurrence = null;
-      switch (medication.frequency) {
-        case 'daily':
-          recurrence = 'RRULE:FREQ=DAILY';
-          break;
-        case 'twice_daily':
-          // For twice daily, we'd create two events, but for simplicity
-          // we'll just create one and note it's twice daily
-          recurrence = 'RRULE:FREQ=DAILY';
-          break;
-        case 'weekly':
-          recurrence = 'RRULE:FREQ=WEEKLY';
-          break;
-        case 'monthly':
-          recurrence = 'RRULE:FREQ=MONTHLY';
-          break;
+      if (!newMedication.name || !newMedication.dosage || !newMedication.time) {
+        toast.error('Please fill all required fields');
+        return;
       }
-      
-      const event = {
-        summary: `Take ${medication.name} (${medication.dosage})`,
-        description: medication.notes || 'Medication reminder',
-        startTime: startDate.toISOString(),
-        endTime: new Date(startDate.getTime() + 10 * 60000).toISOString(), // 10 min duration
-        recurrence: recurrence,
-        endRecurrence: endDate ? endDate.toISOString() : null
-      };
-      
-      await supabase.functions.invoke('google-calendar-event', {
-        body: { event }
-      });
-      
-      toast.success('Added medication reminder to Google Calendar');
-    } catch (error) {
-      console.error('Error adding to Google Calendar:', error);
-      toast.error('Failed to add to Google Calendar');
-    }
-  };
 
-  const onSubmit = async (values: z.infer<typeof formSchema>) => {
-    if (!user) {
-      toast.error('You must be logged in to add medications');
-      return;
-    }
-    
-    setLoading(true);
-    
-    try {
       const { data, error } = await supabase
         .from('medications')
         .insert({
-          user_id: user.id,
-          name: values.name,
-          dosage: values.dosage,
-          frequency: values.frequency,
-          time: values.time,
-          start_date: values.start_date.toISOString(),
-          end_date: values.end_date ? values.end_date.toISOString() : null,
-          notes: values.notes || null
+          user_id: user?.id,
+          name: newMedication.name,
+          dosage: newMedication.dosage,
+          frequency: newMedication.frequency,
+          time: newMedication.time,
+          start_date: newMedication.start_date.toISOString(),
+          end_date: newMedication.end_date ? newMedication.end_date.toISOString() : null,
+          notes: newMedication.notes || null
         })
-        .select();
-      
+        .select()
+        .single();
+
       if (error) throw error;
-      
-      toast.success('Medication reminder added successfully!');
-      
-      // Add new medication to state
-      if (data && data.length > 0) {
-        setMedications([data[0], ...medications]);
-        
-        // Add to Google Calendar if integration is enabled
-        const calendarEnabled = localStorage.getItem('googleCalendarEnabled') === 'true';
-        if (calendarEnabled) {
-          await addToGoogleCalendar(data[0]);
-        }
+
+      // Add to Google Calendar if integration is enabled
+      try {
+        await addToGoogleCalendar(data as Medication);
+      } catch (calendarError) {
+        console.error('Failed to add to Google Calendar:', calendarError);
+        // Don't stop the flow, just notify the user
+        toast.error('Medication saved but could not add to Google Calendar');
       }
+
+      // Add the new medication to the state
+      setMedications(prev => [data as Medication, ...prev]);
       
-      form.reset();
-    } catch (error) {
+      // Reset form and close dialog
+      resetForm();
+      setIsAddDialogOpen(false);
+      
+      toast.success('Medication added successfully!');
+    } catch (error: any) {
       console.error('Error adding medication:', error);
-      toast.error('Failed to add medication reminder');
-    } finally {
-      setLoading(false);
+      toast.error(`Failed to add medication: ${error.message}`);
     }
   };
 
-  const deleteMedication = async (id: string) => {
+  const handleDeleteMedication = async (id: string) => {
     try {
       const { error } = await supabase
         .from('medications')
         .delete()
         .eq('id', id);
-      
+
       if (error) throw error;
-      
-      // Update local state
-      setMedications(medications.filter(med => med.id !== id));
-      
-      toast.success('Medication reminder deleted');
-    } catch (error) {
+
+      setMedications(prev => prev.filter(med => med.id !== id));
+      toast.success('Medication deleted successfully');
+    } catch (error: any) {
       console.error('Error deleting medication:', error);
-      toast.error('Failed to delete medication reminder');
+      toast.error(`Failed to delete medication: ${error.message}`);
     }
   };
 
-  return (
-    <div className="space-y-6">
-      <Card className="glass-card p-6">
-        <h2 className="text-xl font-semibold mb-6">Add Medication Reminder</h2>
-        
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Medication Name</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g., Aspirin" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="dosage"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Dosage</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g., 100mg" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <FormField
-                control={form.control}
-                name="frequency"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Frequency</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select frequency" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="daily">Daily</SelectItem>
-                        <SelectItem value="twice_daily">Twice Daily</SelectItem>
-                        <SelectItem value="weekly">Weekly</SelectItem>
-                        <SelectItem value="monthly">Monthly</SelectItem>
-                        <SelectItem value="as_needed">As Needed</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="time"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Time</FormLabel>
-                    <FormControl>
-                      <Input type="time" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <FormField
-                control={form.control}
-                name="start_date"
-                render={({ field }) => (
-                  <FormItem className="flex flex-col">
-                    <FormLabel>Start Date</FormLabel>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant={"outline"}
-                            className="w-full pl-3 text-left font-normal"
-                          >
-                            {field.value ? (
-                              format(field.value, "PPP")
-                            ) : (
-                              <span>Pick a date</span>
-                            )}
-                            <Calendar className="ml-auto h-4 w-4 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={field.value}
-                          onSelect={field.onChange}
-                          className="p-3 pointer-events-auto"
-                        />
-                      </PopoverContent>
-                    </Popover>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="end_date"
-                render={({ field }) => (
-                  <FormItem className="flex flex-col">
-                    <FormLabel>End Date (Optional)</FormLabel>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant={"outline"}
-                            className="w-full pl-3 text-left font-normal"
-                          >
-                            {field.value ? (
-                              format(field.value, "PPP")
-                            ) : (
-                              <span>Pick end date (optional)</span>
-                            )}
-                            <Calendar className="ml-auto h-4 w-4 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={field.value}
-                          onSelect={field.onChange}
-                          initialFocus
-                          disabled={(date) => {
-                            const startDate = form.getValues('start_date');
-                            if (!startDate) return false;
-                            return date < startDate;
-                          }}
-                          className="p-3 pointer-events-auto"
-                        />
-                      </PopoverContent>
-                    </Popover>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-            
-            <FormField
-              control={form.control}
-              name="notes"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Notes (Optional)</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Additional instructions or notes" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Adding...' : 'Add Medication Reminder'}
-            </Button>
-          </form>
-        </Form>
-      </Card>
+  const addToGoogleCalendar = async (medication: Medication) => {
+    try {
+      // Create event details
+      const eventDetails = {
+        summary: `Take ${medication.name} ${medication.dosage}`,
+        description: medication.notes || `Remember to take your ${medication.name}. Dosage: ${medication.dosage}`,
+        startTime: combineDateTime(new Date(medication.start_date), medication.time),
+        endTime: addMinutes(combineDateTime(new Date(medication.start_date), medication.time), 15),
+        frequency: medication.frequency,
+        endDate: medication.end_date ? new Date(medication.end_date) : null
+      };
+
+      // Send to the edge function
+      const { data, error } = await supabase.functions.invoke('google-calendar-event', {
+        body: { event: eventDetails }
+      });
+
+      if (error) throw error;
       
-      <Card className="glass-card p-6">
-        <h2 className="text-xl font-semibold mb-6">Your Medications</h2>
-        
-        {fetchingMeds ? (
-          <p className="text-center py-4 text-muted-foreground">Loading medications...</p>
-        ) : medications.length === 0 ? (
-          <p className="text-center py-4 text-muted-foreground">No medication reminders added yet</p>
-        ) : (
-          <div className="space-y-4">
-            {medications.map((medication) => (
-              <div key={medication.id} className="border rounded-lg p-4 bg-card/50">
-                <div className="flex justify-between">
-                  <div>
-                    <div className="flex items-start">
-                      <Pill className="h-5 w-5 mr-2 text-primary mt-0.5" />
-                      <div>
-                        <h3 className="font-medium">{medication.name} ({medication.dosage})</h3>
-                        <div className="flex items-center text-sm text-muted-foreground mt-1">
-                          <Clock className="h-4 w-4 mr-1" />
-                          {medication.time} - {formatFrequency(medication.frequency)}
-                        </div>
-                        <div className="text-sm mt-1">
-                          {format(new Date(medication.start_date), "PPP")} to {medication.end_date 
-                            ? format(new Date(medication.end_date), "PPP") 
-                            : 'Ongoing'}
-                        </div>
-                        {medication.notes && (
-                          <p className="mt-2 text-sm text-muted-foreground">{medication.notes}</p>
+      if (!data.success) throw new Error(data.message);
+      
+      // In a real implementation, you would store the Google Calendar event ID 
+      // to allow updates/deletion later
+      console.log('Added to Google Calendar:', data);
+      
+      return data;
+    } catch (error: any) {
+      console.error('Error adding to Google Calendar:', error);
+      throw error;
+    }
+  };
+
+  // Helper function to combine a date and time string
+  const combineDateTime = (date: Date, timeStr: string) => {
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    const combined = new Date(date);
+    combined.setHours(hours, minutes, 0, 0);
+    return combined.toISOString();
+  };
+
+  // Helper function to add minutes to a date
+  const addMinutes = (dateStr: string, minutes: number) => {
+    const date = new Date(dateStr);
+    date.setMinutes(date.getMinutes() + minutes);
+    return date.toISOString();
+  };
+
+  const resetForm = () => {
+    setNewMedication({
+      name: '',
+      dosage: '',
+      frequency: 'daily',
+      time: '08:00',
+      start_date: new Date(),
+      end_date: null,
+      notes: ''
+    });
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold">Medication Reminders</h2>
+        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+          <DialogTrigger asChild>
+            <Button>
+              <PlusCircle className="mr-2 h-4 w-4" /> Add Medication
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Add New Medication</DialogTitle>
+              <DialogDescription>
+                Set up reminders for your medications.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Medication Name</Label>
+                  <Input 
+                    id="name" 
+                    placeholder="e.g. Aspirin"
+                    value={newMedication.name}
+                    onChange={(e) => setNewMedication({...newMedication, name: e.target.value})}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="dosage">Dosage</Label>
+                  <Input 
+                    id="dosage" 
+                    placeholder="e.g. 500mg"
+                    value={newMedication.dosage}
+                    onChange={(e) => setNewMedication({...newMedication, dosage: e.target.value})}
+                  />
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="frequency">Frequency</Label>
+                <Select 
+                  value={newMedication.frequency}
+                  onValueChange={(value) => setNewMedication({...newMedication, frequency: value})}
+                >
+                  <SelectTrigger id="frequency">
+                    <SelectValue placeholder="Select frequency" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {FREQUENCY_OPTIONS.map(option => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="time">Time to Take</Label>
+                <Input 
+                  id="time" 
+                  type="time"
+                  value={newMedication.time}
+                  onChange={(e) => setNewMedication({...newMedication, time: e.target.value})}
+                />
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="start_date">Start Date</Label>
+                  <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        id="start_date"
+                        variant={"outline"}
+                        className={cn(
+                          "w-full justify-start text-left font-normal"
                         )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {newMedication.start_date ? (
+                          format(newMedication.start_date, "PPP")
+                        ) : (
+                          <span>Pick a date</span>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                      <Calendar
+                        mode="single"
+                        selected={newMedication.start_date}
+                        onSelect={(date) => {
+                          if (date) {
+                            setNewMedication({...newMedication, start_date: date});
+                            setIsCalendarOpen(false);
+                          }
+                        }}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="end_date">End Date (Optional)</Label>
+                  <Popover open={isEndDateCalendarOpen} onOpenChange={setIsEndDateCalendarOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        id="end_date"
+                        variant={"outline"}
+                        className={cn(
+                          "w-full justify-start text-left font-normal"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {newMedication.end_date ? (
+                          format(newMedication.end_date, "PPP")
+                        ) : (
+                          <span>No end date</span>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                      <div className="p-2">
+                        <Button 
+                          variant="ghost" 
+                          className="w-full justify-start"
+                          onClick={() => {
+                            setNewMedication({...newMedication, end_date: null});
+                            setIsEndDateCalendarOpen(false);
+                          }}
+                        >
+                          Clear end date
+                        </Button>
                       </div>
-                    </div>
+                      <Calendar
+                        mode="single"
+                        selected={newMedication.end_date ?? undefined}
+                        onSelect={(date) => {
+                          setNewMedication({...newMedication, end_date: date});
+                          setIsEndDateCalendarOpen(false);
+                        }}
+                        disabled={(date) => date < addDays(newMedication.start_date, 1)}
+                        initialFocus
+                        className="border-t"
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="notes">Notes (Optional)</Label>
+                <Textarea 
+                  id="notes" 
+                  placeholder="Any special instructions..."
+                  value={newMedication.notes}
+                  onChange={(e) => setNewMedication({...newMedication, notes: e.target.value})}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => {
+                resetForm();
+                setIsAddDialogOpen(false);
+              }}>
+                Cancel
+              </Button>
+              <Button onClick={handleAddMedication}>
+                Add Medication
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {isLoading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {[1, 2].map(i => (
+            <Card key={i} className="animate-pulse">
+              <CardHeader>
+                <div className="h-5 bg-gray-200 rounded w-1/2 mb-2"></div>
+                <div className="h-4 bg-gray-200 rounded w-1/3"></div>
+              </CardHeader>
+              <CardContent>
+                <div className="h-12 bg-gray-200 rounded mb-2"></div>
+                <div className="h-4 bg-gray-200 rounded w-2/3"></div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : medications.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-10 space-y-4">
+            <Pill className="h-12 w-12 text-gray-400" />
+            <p className="text-center text-gray-500">No medications found. Add your first medication to get started.</p>
+            <Button onClick={() => setIsAddDialogOpen(true)}>
+              <PlusCircle className="mr-2 h-4 w-4" /> Add Medication
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {medications.map((med) => (
+            <Card key={med.id}>
+              <CardHeader className="pb-2">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <CardTitle className="flex items-center">
+                      <Pill className="h-4 w-4 mr-2 text-blue-500" />
+                      {med.name}
+                    </CardTitle>
+                    <p className="text-sm font-medium mt-1">{med.dosage}</p>
                   </div>
                   <Button 
                     variant="ghost" 
                     size="icon"
-                    onClick={() => deleteMedication(medication.id)}
-                    className="text-destructive hover:bg-destructive/10"
+                    className="h-8 w-8 text-red-500"
+                    onClick={() => handleDeleteMedication(med.id)}
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
+              </CardHeader>
+              <CardContent className="pb-2">
+                <div className="space-y-2">
+                  <div className="flex items-center text-sm">
+                    <Clock className="h-4 w-4 mr-2 text-gray-500" />
+                    <span>
+                      {med.frequency.replace(/_/g, ' ')} at {formatTime(med.time)}
+                    </span>
+                  </div>
+                  <div className="flex items-center text-sm">
+                    <CalendarIcon className="h-4 w-4 mr-2 text-gray-500" />
+                    <span>
+                      From {formatDate(med.start_date)}
+                      {med.end_date ? ` to ${formatDate(med.end_date)}` : ''}
+                    </span>
+                  </div>
+                  {med.notes && (
+                    <p className="text-sm mt-2 text-gray-600">
+                      {med.notes}
+                    </p>
+                  )}
+                </div>
+              </CardContent>
+              <CardFooter className="pt-2">
+                <div className="flex items-center text-xs text-gray-500">
+                  <Check className="h-3 w-3 mr-1" />
+                  Added on {formatDate(med.created_at)}
+                </div>
+              </CardFooter>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
 
-// Helper function to format frequency for display
-const formatFrequency = (frequency: string) => {
-  switch (frequency) {
-    case 'daily':
-      return 'Daily';
-    case 'twice_daily':
-      return 'Twice Daily';
-    case 'weekly':
-      return 'Weekly';
-    case 'monthly':
-      return 'Monthly';
-    case 'as_needed':
-      return 'As Needed';
-    default:
-      return frequency;
-  }
+// Helper function to format time from 24h to 12h format
+const formatTime = (time: string): string => {
+  const [hours, minutes] = time.split(':');
+  const hour = parseInt(hours, 10);
+  const meridiem = hour >= 12 ? 'PM' : 'AM';
+  const hour12 = hour % 12 || 12;
+  return `${hour12}:${minutes} ${meridiem}`;
+};
+
+// Helper function to format date
+const formatDate = (dateString: string): string => {
+  return format(new Date(dateString), 'MMM d, yyyy');
 };
 
 export default MedicationReminders;
