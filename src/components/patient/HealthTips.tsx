@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -222,10 +221,10 @@ const HealthTips = () => {
       
       const contextData = {
         user_id: user?.id,
-        recentIssues: recentHealthIssues.length > 0 ? recentHealthIssues : undefined
+        recentIssues: []
       };
       
-      toast.info('Generating personalized health tip...');
+      toast.info('Generating general health tip...');
       
       const { data, error } = await supabase.functions.invoke('generate-health-tip', {
         body: contextData
@@ -264,7 +263,7 @@ const HealthTips = () => {
   const generateContextualTip = async () => {
     try {
       if (recentHealthIssues.length === 0) {
-        toast.info('Generating general health tip as no recent health issues found');
+        toast.info('No recent health issues found. Generating general health tip instead.');
       } else {
         toast.info('Generating health tip based on your recent health concerns');
       }
@@ -273,7 +272,7 @@ const HealthTips = () => {
       
       const contextData = {
         user_id: user?.id,
-        recentIssues: recentHealthIssues
+        recentIssues: recentHealthIssues.length > 0 ? recentHealthIssues : []
       };
       
       const { data, error } = await supabase.functions.invoke('generate-health-tip', {
@@ -375,7 +374,7 @@ const HealthTips = () => {
                 <Plus className="mr-2 h-4 w-4" /> Add Tip
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-md">
               <DialogHeader>
                 <DialogTitle>Add New Health Tip</DialogTitle>
                 <DialogDescription>

@@ -18,6 +18,7 @@ serve(async (req) => {
 
   try {
     if (!GEMINI_API_KEY) {
+      console.error("GEMINI_API_KEY environment variable not set");
       throw new Error("GEMINI_API_KEY environment variable not set");
     }
 
@@ -26,16 +27,18 @@ serve(async (req) => {
     const { user_id, recentIssues } = requestData;
     
     if (!user_id) {
+      console.error("User ID is missing in request");
       throw new Error("User ID is required");
     }
 
     console.log("Generating tip for user:", user_id);
-    console.log("Recent health issues:", recentIssues ? "Available" : "Not available");
+    console.log("Recent health issues:", recentIssues ? JSON.stringify(recentIssues).substring(0, 100) + "..." : "Not available");
     
-    // Prepare prompt for generating a health tip
+    // Prepare prompt for generating a health tip based on type
     let prompt = "";
+    const isContextual = recentIssues && recentIssues.length > 0;
     
-    if (recentIssues && recentIssues.length > 0) {
+    if (isContextual) {
       // Create a personalized prompt based on the user's health issues
       prompt = `
         Generate a helpful health tip that would be relevant for someone with the following recent health concerns:
@@ -98,6 +101,7 @@ serve(async (req) => {
       const generatedText = data.candidates[0].content.parts[0].text;
       console.log("Generated text sample:", generatedText.substring(0, 100) + "...");
       
+      // Try to find and parse JSON directly
       const jsonMatch = generatedText.match(/\{[\s\S]*\}/);
       
       if (jsonMatch) {
@@ -123,7 +127,7 @@ serve(async (req) => {
         success: true,
         tip: tipContent,
         user_id: user_id,
-        context: recentIssues ? "personalized" : "general"
+        context: isContextual ? "personalized" : "general"
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

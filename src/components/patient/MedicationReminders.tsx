@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -9,7 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
-import { PlusCircle, Calendar as CalendarIcon, Clock, Pill, Trash2, Check, RefreshCw } from "lucide-react";
+import { PlusCircle, Calendar as CalendarIcon, Clock, Pill, Trash2, Check, RefreshCw } from 'lucide-react';
 import { format, addDays, isToday } from 'date-fns';
 import { cn } from "@/lib/utils";
 import { supabase } from '@/integrations/supabase/client';
@@ -58,11 +57,40 @@ const MedicationReminders = () => {
   const [isEndDateCalendarOpen, setIsEndDateCalendarOpen] = useState(false);
   const [todaysMedications, setTodaysMedications] = useState<Medication[]>([]);
 
+  const fetchMedications = useCallback(async () => {
+    if (!user) return;
+    
+    try {
+      setIsLoading(true);
+      console.log('Fetching medications for user:', user?.id);
+      
+      const { data, error } = await supabase
+        .from('medications')
+        .select('*')
+        .eq('user_id', user?.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      
+      console.log('Fetched medications:', data?.length || 0);
+      setMedications(data as Medication[]);
+      
+      if (data) {
+        const todayMeds = filterTodaysMedications(data as Medication[]);
+        setTodaysMedications(todayMeds);
+      }
+    } catch (error: any) {
+      console.error('Error fetching medications:', error);
+      toast.error(`Failed to load medications: ${error.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user]);
+
   useEffect(() => {
     if (user) {
       fetchMedications();
       
-      // Set up real-time subscription for medications
       const channel = supabase
         .channel('medications-changes')
         .on(
@@ -79,13 +107,34 @@ const MedicationReminders = () => {
             if (payload.eventType === 'INSERT') {
               console.log('New medication added:', payload.new);
               setMedications(prev => [payload.new as Medication, ...prev]);
-              checkIfMedicationDueToday(payload.new as Medication);
+              
+              const newMed = payload.new as Medication;
+              if (isMedicationForToday(newMed)) {
+                setTodaysMedications(prev => [...prev, newMed]);
+              }
+              
               toast.success(`Medication "${payload.new.name}" added`);
             } else if (payload.eventType === 'UPDATE') {
               console.log('Medication updated:', payload.new);
               setMedications(prev => 
                 prev.map(med => med.id === payload.new.id ? payload.new as Medication : med)
               );
+              
+              setTodaysMedications(prev => {
+                const isAlreadyInToday = prev.some(med => med.id === payload.new.id);
+                const shouldBeInToday = isMedicationForToday(payload.new as Medication);
+                
+                if (isAlreadyInToday && !shouldBeInToday) {
+                  return prev.filter(med => med.id !== payload.new.id);
+                } else if (!isAlreadyInToday && shouldBeInToday) {
+                  return [...prev, payload.new as Medication];
+                } else if (isAlreadyInToday && shouldBeInToday) {
+                  return prev.map(med => med.id === payload.new.id ? payload.new as Medication : med);
+                }
+                
+                return prev;
+              });
+              
               toast.info(`Medication "${payload.new.name}" updated`);
             } else if (payload.eventType === 'DELETE') {
               console.log('Medication deleted:', payload.old);
@@ -104,7 +153,20 @@ const MedicationReminders = () => {
         supabase.removeChannel(channel);
       };
     }
-  }, [user]);
+  }, [user, fetchMedications]);
+
+  const isMedicationForToday = (medication: Medication) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const startDate = new Date(medication.start_date);
+    startDate.setHours(0, 0, 0, 0);
+    
+    const endDate = medication.end_date ? new Date(medication.end_date) : null;
+    if (endDate) endDate.setHours(0, 0, 0, 0);
+    
+    return startDate <= today && (!endDate || endDate >= today);
+  };
 
   useEffect(() => {
     if (medications.length > 0) {
@@ -122,29 +184,6 @@ const MedicationReminders = () => {
       }
     }
   }, [medications]);
-
-  const fetchMedications = async () => {
-    try {
-      setIsLoading(true);
-      console.log('Fetching medications for user:', user?.id);
-      
-      const { data, error } = await supabase
-        .from('medications')
-        .select('*')
-        .eq('user_id', user?.id)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      
-      console.log('Fetched medications:', data?.length || 0);
-      setMedications(data as Medication[]);
-    } catch (error: any) {
-      console.error('Error fetching medications:', error);
-      toast.error(`Failed to load medications: ${error.message}`);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const filterTodaysMedications = (meds: Medication[]) => {
     const today = new Date();
