@@ -16,7 +16,7 @@ const PatientMedications = () => {
           </p>
         </div>
         
-        <Card>
+        <Card className="shadow-md border-t-4 border-t-primary">
           <CardContent className="pt-6">
             <MedicationReminders />
           </CardContent>

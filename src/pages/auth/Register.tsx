@@ -35,9 +35,16 @@ const Register = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!name || !email || !password || !confirmPassword) {
-      toast.error('Please fill in all required fields');
-      return;
+    if (role === 'patient') {
+      if (!email || !password || !confirmPassword) {
+        toast.error('Please fill in all required fields');
+        return;
+      }
+    } else {
+      if (!name || !email || !password || !confirmPassword) {
+        toast.error('Please fill in all required fields');
+        return;
+      }
     }
     
     if (password !== confirmPassword) {
@@ -57,19 +64,30 @@ const Register = () => {
     
     setIsLoading(true);
 
-    // Split name into first and last name
-    const nameParts = name.split(' ');
-    const firstName = nameParts[0];
-    const lastName = nameParts.slice(1).join(' ');
-    
     try {
-      const userData = {
-        first_name: firstName,
-        last_name: lastName || '',
-        role: role,
-        specialty: role === 'doctor' ? specialty : null,
-        age: role === 'patient' ? parseInt(age) : null
-      };
+      // For patients, use anonymous name
+      let userData;
+      
+      if (role === 'patient') {
+        userData = {
+          first_name: 'Anonymous',
+          last_name: 'Patient',
+          role: 'patient',
+          age: parseInt(age)
+        };
+      } else {
+        // Split name into first and last name for doctors
+        const nameParts = name.split(' ');
+        const firstName = nameParts[0];
+        const lastName = nameParts.slice(1).join(' ');
+        
+        userData = {
+          first_name: firstName,
+          last_name: lastName || '',
+          role: 'doctor',
+          specialty: specialty
+        };
+      }
       
       await signUp(email, password, userData);
       // The auth context will handle navigation and success toasts
@@ -118,23 +136,25 @@ const Register = () => {
                 </RadioGroup>
               </div>
               
-              <div className="space-y-2">
-                <Label htmlFor="name">Full Name</Label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <User className="h-5 w-5 text-muted-foreground" />
+              {role === 'doctor' && (
+                <div className="space-y-2">
+                  <Label htmlFor="name">Full Name</Label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <User className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                    <Input
+                      id="name"
+                      type="text"
+                      placeholder="John Doe"
+                      className="pl-10"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      required={role === 'doctor'}
+                    />
                   </div>
-                  <Input
-                    id="name"
-                    type="text"
-                    placeholder="John Doe"
-                    className="pl-10"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    required
-                  />
                 </div>
-              </div>
+              )}
               
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>

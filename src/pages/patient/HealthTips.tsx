@@ -12,11 +12,11 @@ const PatientHealthTips = () => {
         <div className="mb-6">
           <h1 className="text-3xl font-bold tracking-tight">Health Tips</h1>
           <p className="text-muted-foreground">
-            Browse useful health tips and recommendations.
+            Browse useful health tips and recommendations curated for you.
           </p>
         </div>
         
-        <Card>
+        <Card className="shadow-md border-t-4 border-t-primary">
           <CardContent className="pt-6">
             <HealthTipsComponent />
           </CardContent>

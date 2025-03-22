@@ -11,16 +11,18 @@ import {
   Lightbulb, 
   UserRound,
   Menu,
-  X
+  X,
+  LogOut
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
+import SignOutButton from '@/components/auth/SignOutButton';
 
 const PatientNavbar = () => {
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notifications, setNotifications] = useState({
     appointments: 0,
@@ -142,7 +144,7 @@ const PatientNavbar = () => {
           {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
         </Button>
         <span className="font-medium text-sm">Patient Menu</span>
-        <div className="w-10"></div> {/* Empty div for alignment */}
+        <SignOutButton variant="ghost" size="icon" showText={false} />
       </div>
 
       {/* Mobile navigation */}
@@ -177,25 +179,28 @@ const PatientNavbar = () => {
       {/* Desktop navigation */}
       <div className="hidden md:block">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <nav className="flex items-center space-x-4 lg:space-x-6 h-14">
-            {navItems.map((item) => (
-              <Link
-                key={item.path}
-                to={item.path}
-                className={cn(
-                  "flex items-center text-sm font-medium transition-colors hover:text-primary relative",
-                  isActive(item.path) 
-                    ? "text-primary" 
-                    : "text-muted-foreground"
-                )}
-              >
-                <item.icon className="h-4 w-4 mr-2" />
-                {item.label}
-                {item.count ? (
-                  <Badge variant="secondary" className="ml-1">{item.count}</Badge>
-                ) : null}
-              </Link>
-            ))}
+          <nav className="flex items-center justify-between h-14">
+            <div className="flex items-center space-x-4 lg:space-x-6">
+              {navItems.map((item) => (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  className={cn(
+                    "flex items-center text-sm font-medium transition-colors hover:text-primary relative",
+                    isActive(item.path) 
+                      ? "text-primary" 
+                      : "text-muted-foreground"
+                  )}
+                >
+                  <item.icon className="h-4 w-4 mr-2" />
+                  {item.label}
+                  {item.count ? (
+                    <Badge variant="secondary" className="ml-1">{item.count}</Badge>
+                  ) : null}
+                </Link>
+              ))}
+            </div>
+            <SignOutButton />
           </nav>
         </div>
       </div>

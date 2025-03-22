@@ -5,11 +5,12 @@ import { Menu, X, LogOut, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
+import SignOutButton from '@/components/auth/SignOutButton';
 
 const Navbar = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, profile, signOut, isAuthenticated } = useAuth();
+  const { user, profile, isAuthenticated } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   // Don't show the main navbar on patient dashboard pages
@@ -23,16 +24,6 @@ const Navbar = () => {
     setIsMenuOpen(!isMenuOpen);
   };
 
-  const handleSignOut = async (e: React.MouseEvent) => {
-    e.preventDefault();
-    try {
-      await signOut();
-      setIsMenuOpen(false);
-    } catch (error) {
-      console.error('Error signing out:', error);
-    }
-  };
-
   const handleNavigation = (path: string) => {
     navigate(path);
     setIsMenuOpen(false);
@@ -42,6 +33,21 @@ const Navbar = () => {
   if (isPatientPage) {
     return null;
   }
+
+  // Handle the "Get Started" action
+  const handleGetStarted = () => {
+    if (isAuthenticated) {
+      if (profile?.role === 'patient') {
+        navigate('/patient/overview');
+      } else if (profile?.role === 'doctor') {
+        navigate('/dashboard/doctor');
+      } else {
+        navigate('/auth/register');
+      }
+    } else {
+      navigate('/auth/register');
+    }
+  };
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
@@ -113,25 +119,17 @@ const Navbar = () => {
             {isAuthenticated ? (
               <>
                 <div className="text-sm font-medium">
-                  Hello, {profile?.first_name || 'User'}
+                  {profile?.role === 'patient' ? 'Anonymous' : `Hello, ${profile?.first_name || 'User'}`}
                 </div>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="rounded-full" 
-                  onClick={handleSignOut}
-                >
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Sign Out
-                </Button>
+                <SignOutButton />
               </>
             ) : (
               <>
                 <Button asChild variant="outline" className="rounded-full">
                   <Link to="/auth/login">Sign In</Link>
                 </Button>
-                <Button asChild className="rounded-full">
-                  <Link to="/auth/register">Sign Up</Link>
+                <Button asChild className="rounded-full" onClick={handleGetStarted}>
+                  <Link to="/auth/register">Get Started</Link>
                 </Button>
               </>
             )}
@@ -216,17 +214,10 @@ const Navbar = () => {
                   <div className="flex items-center">
                     <User className="h-5 w-5 mr-2" />
                     <div className="text-base font-medium">
-                      {profile?.first_name} {profile?.last_name}
+                      {profile?.role === 'patient' ? 'Anonymous' : `${profile?.first_name || ''} ${profile?.last_name || ''}`}
                     </div>
                   </div>
-                  <Button 
-                    onClick={handleSignOut}
-                    variant="outline"
-                    className="w-full"
-                  >
-                    <LogOut className="h-4 w-4 mr-2" />
-                    Sign Out
-                  </Button>
+                  <SignOutButton className="w-full" />
                 </div>
               ) : (
                 <div className="flex-shrink-0 w-full space-y-2">
@@ -235,9 +226,9 @@ const Navbar = () => {
                       Sign In
                     </Link>
                   </Button>
-                  <Button asChild className="w-full">
-                    <Link to="/auth/register" onClick={() => setIsMenuOpen(false)}>
-                      Sign Up
+                  <Button asChild className="w-full" onClick={() => { setIsMenuOpen(false); handleGetStarted(); }}>
+                    <Link to="/auth/register">
+                      Get Started
                     </Link>
                   </Button>
                 </div>
