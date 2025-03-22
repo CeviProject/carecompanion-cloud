@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 
 const Login = () => {
-  const { signIn } = useAuth();
+  const { signIn, profile } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -31,10 +31,8 @@ const Login = () => {
       await signIn(email, password);
       console.log('Login successful, redirecting...');
       
-      // Navigate to the appropriate dashboard based on user role
-      // This will now be handled by the onAuthStateChange in AuthContext
-      // We'll just go to the home page and let the protected routes handle redirection
-      navigate('/');
+      // Redirect will be handled by AuthContext onAuthStateChange
+      // This is left empty intentionally as navigation will happen automatically
     } catch (error) {
       console.error('Login error:', error);
       // Error is already handled in the AuthContext

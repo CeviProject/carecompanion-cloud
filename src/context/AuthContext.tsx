@@ -27,27 +27,39 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const navigate = useNavigate();
 
   useEffect(() => {
+    console.log('AuthProvider mounted, setting up auth state listener');
+    
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('Auth state changed:', event);
+        console.log('Auth state changed:', event, session?.user?.id);
         setSession(session);
         setUser(session?.user ?? null);
         setIsAuthenticated(!!session?.user); // Update authentication flag
         
         if (session?.user) {
+          console.log('Fetching profile for user:', session.user.id);
           const { data, error } = await supabase
             .from('profiles')
             .select('*')
             .eq('id', session.user.id)
-            .single();
+            .maybeSingle();
           
           if (error) {
             console.error('Error fetching profile:', error);
           } else {
+            console.log('Profile fetched:', data);
             setProfile(data);
+            
+            // Navigate to appropriate dashboard if user is on auth pages
+            const currentPath = window.location.pathname;
+            if (currentPath === '/' || currentPath.startsWith('/auth/')) {
+              console.log('Redirecting to dashboard for role:', data?.role || 'patient');
+              navigate(`/dashboard/${data?.role || 'patient'}`);
+            }
           }
         } else {
+          console.log('No user session, clearing profile');
           setProfile(null);
         }
 
@@ -56,22 +68,33 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     );
 
     // THEN check for existing session
+    console.log('Checking for existing session');
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log('Existing session check result:', !!session);
       setSession(session);
       setUser(session?.user ?? null);
       setIsAuthenticated(!!session?.user); // Update authentication flag
       
       if (session?.user) {
+        console.log('Fetching profile for existing user:', session.user.id);
         supabase
           .from('profiles')
           .select('*')
           .eq('id', session.user.id)
-          .single()
+          .maybeSingle()
           .then(({ data, error }) => {
             if (error) {
-              console.error('Error fetching profile:', error);
+              console.error('Error fetching profile for existing user:', error);
             } else {
+              console.log('Profile fetched for existing user:', data);
               setProfile(data);
+              
+              // Check if user is on auth pages and redirect if needed
+              const currentPath = window.location.pathname;
+              if (currentPath === '/' || currentPath.startsWith('/auth/')) {
+                console.log('Redirecting existing user to dashboard for role:', data?.role || 'patient');
+                navigate(`/dashboard/${data?.role || 'patient'}`);
+              }
             }
             setLoading(false);
           });
@@ -81,24 +104,28 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     });
 
     return () => {
+      console.log('AuthProvider unmounting, unsubscribing from auth state changes');
       subscription.unsubscribe();
     };
-  }, []);
+  }, [navigate]);
 
   const signIn = async (email: string, password: string) => {
     try {
+      console.log('Attempting sign in for email:', email);
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (error) {
+        console.error('Sign in error:', error.message);
         throw error;
       }
 
       toast.success('Login successful!');
       // Let the onAuthStateChange handler navigate based on user role
     } catch (error: any) {
+      console.error('Sign in catch block error:', error.message);
       toast.error(error.message || 'Failed to sign in');
       throw error;
     }
@@ -106,6 +133,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signUp = async (email: string, password: string, userData: any) => {
     try {
+      console.log('Attempting sign up for email:', email);
       const { error } = await supabase.auth.signUp({
         email,
         password,
@@ -115,11 +143,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       });
 
       if (error) {
+        console.error('Sign up error:', error.message);
         throw error;
       }
 
       toast.success('Registration successful! Please check your email for verification.');
     } catch (error: any) {
+      console.error('Sign up catch block error:', error.message);
       toast.error(error.message || 'Failed to sign up');
       throw error;
     }

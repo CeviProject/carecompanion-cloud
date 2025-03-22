@@ -5,30 +5,133 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Google Auth Callback</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      background-color: #f7f7f7;
+      color: #333;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+      padding: 20px;
+      text-align: center;
+    }
+    .card {
+      background-color: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      padding: 2rem;
+      max-width: 500px;
+      width: 100%;
+    }
+    h1 {
+      margin-top: 0;
+      margin-bottom: 1rem;
+      color: #0070f3;
+    }
+    p {
+      margin-bottom: 1.5rem;
+      line-height: 1.5;
+    }
+    .spinner {
+      border: 4px solid rgba(0, 0, 0, 0.1);
+      border-radius: 50%;
+      border-top: 4px solid #0070f3;
+      width: 40px;
+      height: 40px;
+      margin: 0 auto 1rem;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .status {
+      font-weight: 500;
+      margin-bottom: 1rem;
+    }
+    .error {
+      color: #e53e3e;
+      background-color: #fff5f5;
+      border-radius: 8px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+  </style>
 </head>
 <body>
-  <h1>Authorization Successful!</h1>
-  <p>You can close this window now and return to the application.</p>
+  <div class="card">
+    <div id="spinner" class="spinner"></div>
+    <h1>Google Calendar Authorization</h1>
+    <p id="status" class="status">Processing your authorization...</p>
+    <div id="error-container" style="display: none;" class="error">
+      <p id="error-message">An error occurred</p>
+    </div>
+    <p>You will be redirected back to the application automatically.</p>
+  </div>
   
   <script>
     // Parse the URL to get the code
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('code');
     const state = urlParams.get('state');
+    const error = urlParams.get('error');
+    const errorDescription = urlParams.get('error_description');
     
-    // Post message to parent window with the code
-    if (code && state === 'google_calendar_auth') {
-      window.opener.postMessage({ 
-        type: 'google_auth_callback',
-        code: code
-      }, window.location.origin);
+    // Update status based on the callback results
+    if (error) {
+      document.getElementById('spinner').style.display = 'none';
+      document.getElementById('error-container').style.display = 'block';
+      document.getElementById('error-message').textContent = errorDescription || error;
+      document.getElementById('status').textContent = 'Authorization Failed';
       
-      // Close the window automatically after 2 seconds
+      // Close window after a few seconds even in case of error
       setTimeout(() => {
         window.close();
-      }, 2000);
+      }, 5000);
+    } else if (code && state === 'google_calendar_auth') {
+      // Send message to opener window with the authorization code
+      if (window.opener && !window.opener.closed) {
+        try {
+          window.opener.postMessage({ 
+            type: 'google_auth_callback',
+            code: code
+          }, window.location.origin);
+          
+          document.getElementById('status').textContent = 'Authorization Successful!';
+          
+          // Close the window automatically after a short delay
+          setTimeout(() => {
+            window.close();
+          }, 2000);
+        } catch (e) {
+          document.getElementById('spinner').style.display = 'none';
+          document.getElementById('error-container').style.display = 'block';
+          document.getElementById('error-message').textContent = 'Failed to communicate with the main window.';
+          document.getElementById('status').textContent = 'Communication Error';
+          
+          console.error('Error posting message to opener:', e);
+        }
+      } else {
+        document.getElementById('spinner').style.display = 'none';
+        document.getElementById('status').textContent = 'Authorization Complete';
+        document.getElementById('error-container').style.display = 'block';
+        document.getElementById('error-message').textContent = 'Main window not found. Please close this window and return to the application.';
+      }
     } else {
-      document.body.innerHTML = '<h1>Error</h1><p>Invalid authorization response.</p>';
+      // Invalid response
+      document.getElementById('spinner').style.display = 'none';
+      document.getElementById('error-container').style.display = 'block';
+      document.getElementById('error-message').textContent = 'Invalid authorization response.';
+      document.getElementById('status').textContent = 'Invalid Response';
+      
+      // Close window after a few seconds even in case of error
+      setTimeout(() => {
+        window.close();
+      }, 5000);
     }
   </script>
 </body>
