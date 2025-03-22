@@ -19,6 +19,7 @@ const PatientDashboard = () => {
   const [appointments, setAppointments] = useState<any[]>([]);
   const [currentAssessment, setCurrentAssessment] = useState<string | null>(null);
   const [suggestedSpecialties, setSuggestedSpecialties] = useState<string[] | null>(null);
+  const [recommendedHospitals, setRecommendedHospitals] = useState<any[] | null>(null);
   const [loadingQueries, setLoadingQueries] = useState(true);
   const [loadingAppointments, setLoadingAppointments] = useState(true);
 
@@ -77,6 +78,7 @@ const PatientDashboard = () => {
     setPastQueries([queryData, ...pastQueries]);
     setCurrentAssessment(queryData.ai_assessment);
     setSuggestedSpecialties(queryData.suggestedSpecialties);
+    setRecommendedHospitals(queryData.recommendedHospitals);
     // Switch to the assessment tab
     setActiveTab('assessment');
   };
@@ -218,6 +220,7 @@ const PatientDashboard = () => {
                 <HealthAssessment 
                   assessment={currentAssessment}
                   suggestedSpecialties={suggestedSpecialties}
+                  recommendedHospitals={recommendedHospitals}
                 />
                 
                 <DoctorRecommendations 

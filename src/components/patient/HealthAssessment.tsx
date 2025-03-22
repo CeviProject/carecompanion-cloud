@@ -1,14 +1,25 @@
 
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Brain } from 'lucide-react';
+import { Brain, Building, MapPin } from 'lucide-react';
+
+interface Hospital {
+  name: string;
+  address: string;
+  specialty: string;
+}
 
 interface HealthAssessmentProps {
   assessment: string | null;
   suggestedSpecialties: string[] | null;
+  recommendedHospitals?: Hospital[] | null;
 }
 
-const HealthAssessment = ({ assessment, suggestedSpecialties }: HealthAssessmentProps) => {
+const HealthAssessment = ({ 
+  assessment, 
+  suggestedSpecialties,
+  recommendedHospitals 
+}: HealthAssessmentProps) => {
   if (!assessment) return null;
   
   // Helper function to format the assessment text
@@ -58,6 +69,33 @@ const HealthAssessment = ({ assessment, suggestedSpecialties }: HealthAssessment
               <Badge key={index} variant="outline" className="bg-primary/10">
                 {specialty}
               </Badge>
+            ))}
+          </div>
+        </div>
+      )}
+      
+      {recommendedHospitals && recommendedHospitals.length > 0 && (
+        <div>
+          <h3 className="text-lg font-medium mb-2">Nearby Medical Facilities</h3>
+          <div className="space-y-3">
+            {recommendedHospitals.map((hospital, index) => (
+              <div key={index} className="border rounded-lg p-3 bg-card/50">
+                <div className="flex items-start">
+                  <Building className="h-5 w-5 text-primary mr-2 mt-0.5" />
+                  <div>
+                    <h4 className="font-medium">{hospital.name}</h4>
+                    <p className="text-sm text-muted-foreground flex items-center mt-1">
+                      <MapPin className="h-4 w-4 mr-1" /> 
+                      {hospital.address}
+                    </p>
+                    {hospital.specialty && (
+                      <p className="text-xs mt-1">
+                        <span className="font-medium">Specialty:</span> {hospital.specialty}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
             ))}
           </div>
         </div>

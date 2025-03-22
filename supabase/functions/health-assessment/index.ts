@@ -17,25 +17,29 @@ serve(async (req) => {
   }
 
   try {
-    const { healthQuery } = await req.json();
+    const { healthQuery, patientData } = await req.json();
     
     if (!healthQuery || healthQuery.trim() === '') {
       throw new Error('Health query is required');
     }
     
-    console.log('Processing health query:', healthQuery);
+    console.log('Processing health query with patient data:', { healthQuery, patientData });
     
     // Generate health assessment using Gemini API
-    const assessment = await generateGeminiAssessment(healthQuery);
+    const assessment = await generateGeminiAssessment(healthQuery, patientData);
     
     // Determine suggested specialties based on the assessment
     const suggestedSpecialties = extractSuggestedSpecialties(assessment);
     
-    console.log('Assessment generated successfully');
+    // Extract recommended hospitals from the assessment
+    const recommendedHospitals = extractRecommendedHospitals(assessment);
+    
+    console.log('Assessment generated successfully with specialties and hospitals');
 
     return new Response(JSON.stringify({ 
       assessment,
-      suggestedSpecialties
+      suggestedSpecialties,
+      recommendedHospitals
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
@@ -48,24 +52,49 @@ serve(async (req) => {
   }
 });
 
-// Generate health assessment using Gemini API
-async function generateGeminiAssessment(healthQuery: string): Promise<string> {
+// Generate health assessment using Gemini API with patient data
+async function generateGeminiAssessment(healthQuery: string, patientData: any): Promise<string> {
   if (!GEMINI_API_KEY) {
     throw new Error('GEMINI_API_KEY is not set in the environment variables');
   }
 
-  const prompt = `
-As a healthcare AI assistant, provide a detailed assessment of the following health concerns:
+  // Format patient data for the prompt
+  const patientDetails = `
+Patient Details:
+- Age: ${patientData?.age || 'Not provided'}
+- Gender: ${patientData?.gender || 'Not provided'}
+- Location: ${patientData?.location || 'Not provided'}
+- Medical History: ${patientData?.medicalHistory || 'None provided'}
+`;
 
+  const prompt = `
+As a healthcare AI assistant, provide a detailed assessment of the following health concerns for this patient:
+
+${patientDetails}
+
+Patient's Symptoms and Concerns:
 "${healthQuery}"
 
 Please include:
-1. Possible conditions that might explain these symptoms
-2. General recommendations
-3. Which medical specialists would be appropriate to consult
-4. Any warning signs that would indicate a need for immediate medical attention
 
-Format your response in a helpful, clear manner that is informative but not alarming.
+1. Possible conditions that might explain these symptoms:
+   • List the top 3-5 potential conditions with brief explanations
+   • Note their likelihood (possible, probable, etc.)
+
+2. General recommendations:
+   • Lifestyle modifications
+   • Self-care measures
+   • When to seek medical care
+
+3. Medical specialists that would be appropriate to consult:
+   • List the top 2-3 relevant medical specialties
+
+4. Warning signs that would indicate a need for immediate medical attention
+
+5. Recommended hospitals or clinics near ${patientData?.location || 'the patient'}:
+   • List 3 recommended medical facilities with their specialties and approximate addresses
+
+Format your response in a helpful, clear manner that is informative but not alarming. Use bullet points where appropriate.
 `;
 
   try {
@@ -171,4 +200,158 @@ function extractSuggestedSpecialties(assessment: string): string[] {
   }
 
   return matchedSpecialties;
+}
+
+// Helper function to extract recommended hospitals from the assessment
+function extractRecommendedHospitals(assessment: string): Array<{ name: string, address: string, specialty: string }> {
+  const hospitals: Array<{ name: string, address: string, specialty: string }> = [];
+  
+  // Try to find the "Recommended hospitals" section
+  const sections = assessment.split(/\d+\.\s+/);
+  let hospitalSection = "";
+  
+  // Look for the section that contains hospital recommendations
+  for (const section of sections) {
+    if (
+      section.toLowerCase().includes("hospital") || 
+      section.toLowerCase().includes("clinic") || 
+      section.toLowerCase().includes("medical center") ||
+      section.toLowerCase().includes("medical facility")
+    ) {
+      hospitalSection = section;
+      break;
+    }
+  }
+  
+  if (!hospitalSection) {
+    // If we couldn't identify a specific section, look for bullet points with hospital names
+    const lines = assessment.split('\n');
+    let inHospitalSection = false;
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      
+      // Check if we've entered a hospital section
+      if (
+        line.toLowerCase().includes("recommended hospital") || 
+        line.toLowerCase().includes("nearby hospital") ||
+        line.toLowerCase().includes("medical facilities")
+      ) {
+        inHospitalSection = true;
+        continue;
+      }
+      
+      // If we're in the hospital section and find a bullet point, extract hospital data
+      if (inHospitalSection && (line.startsWith('*') || line.startsWith('-') || line.match(/^\d+\./))) {
+        const cleanLine = line.replace(/^[\*\-\d\.]+\s*/, '').trim();
+        
+        // Extract name and address using common patterns
+        let name = cleanLine;
+        let address = "";
+        let specialty = "";
+        
+        // Look for a separator like ":" or "-" or "located at" to separate name and address
+        if (cleanLine.includes(':')) {
+          [name, address] = cleanLine.split(':').map(s => s.trim());
+        } else if (cleanLine.includes(' - ')) {
+          [name, address] = cleanLine.split(' - ').map(s => s.trim());
+        } else if (cleanLine.toLowerCase().includes('located at')) {
+          [name, address] = cleanLine.split(/located at/i).map(s => s.trim());
+        }
+        
+        // Check for specialty information
+        if (address.toLowerCase().includes('specialist in') || address.toLowerCase().includes('specializing in')) {
+          const specialtyMatch = address.match(/(specialist|specializing) in ([^,\.]+)/i);
+          if (specialtyMatch) {
+            specialty = specialtyMatch[2].trim();
+            address = address.replace(/(specialist|specializing) in ([^,\.]+)/i, '').trim();
+          }
+        } else if (name.toLowerCase().includes('specialist in') || name.toLowerCase().includes('specializing in')) {
+          const specialtyMatch = name.match(/(specialist|specializing) in ([^,\.]+)/i);
+          if (specialtyMatch) {
+            specialty = specialtyMatch[2].trim();
+            name = name.replace(/(specialist|specializing) in ([^,\.]+)/i, '').trim();
+          }
+        }
+        
+        // If we have at least a name, add to hospitals
+        if (name) {
+          hospitals.push({ 
+            name, 
+            address: address || "Address not provided", 
+            specialty: specialty || ""
+          });
+        }
+      }
+      
+      // If we found 3 or more hospitals, or we've left the hospital section, break
+      if (hospitals.length >= 3 || (inHospitalSection && line.match(/^\d+\.\s+/) && !line.toLowerCase().includes("hospital"))) {
+        break;
+      }
+    }
+  } else {
+    // Process the hospital section if found
+    const lines = hospitalSection.split('\n');
+    
+    for (const line of lines) {
+      const trimmedLine = line.trim();
+      
+      // Look for bullet points or numbered items
+      if (trimmedLine.startsWith('*') || trimmedLine.startsWith('-') || trimmedLine.match(/^\d+\./)) {
+        const cleanLine = trimmedLine.replace(/^[\*\-\d\.]+\s*/, '').trim();
+        
+        // Extract name and address
+        let name = cleanLine;
+        let address = "";
+        let specialty = "";
+        
+        // Try to separate name from address
+        if (cleanLine.includes(':')) {
+          [name, address] = cleanLine.split(':').map(s => s.trim());
+        } else if (cleanLine.includes(' - ')) {
+          [name, address] = cleanLine.split(' - ').map(s => s.trim());
+        } else if (cleanLine.toLowerCase().includes('located at')) {
+          [name, address] = cleanLine.split(/located at/i).map(s => s.trim());
+        }
+        
+        // Extract specialty if mentioned
+        const specialtyMatches = [
+          cleanLine.match(/specialist in ([^,\.]+)/i),
+          cleanLine.match(/specializing in ([^,\.]+)/i),
+          cleanLine.match(/specializes in ([^,\.]+)/i)
+        ].filter(Boolean);
+        
+        if (specialtyMatches.length > 0) {
+          specialty = specialtyMatches[0]![1].trim();
+        }
+        
+        // If we have at least a name, add to hospitals
+        if (name) {
+          hospitals.push({ 
+            name, 
+            address: address || "Address not provided", 
+            specialty: specialty || ""
+          });
+        }
+        
+        // Stop after finding 3 hospitals
+        if (hospitals.length >= 3) {
+          break;
+        }
+      }
+    }
+  }
+  
+  // If we couldn't extract hospitals properly, return placeholders
+  if (hospitals.length === 0) {
+    return [
+      {
+        name: "Please consult with a local healthcare provider",
+        address: "For location-specific recommendations",
+        specialty: "General"
+      }
+    ];
+  }
+  
+  return hospitals;
 }
