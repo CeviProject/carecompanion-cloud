@@ -42,6 +42,7 @@ const Index = () => {
 
   const navigateToDashboard = () => {
     const role = profile?.role || 'patient';
+    console.log(`Navigating to dashboard with role: ${role}`);
     if (role === 'patient') {
       navigate('/patient/overview');
     } else if (role === 'doctor') {
@@ -56,7 +57,7 @@ const Index = () => {
       console.log('Auto-redirecting authenticated user to dashboard');
       navigateToDashboard();
     }
-  }, [isAuthenticated, profile, loading, navigate]);
+  }, [isAuthenticated, profile, loading]);
 
   return (
     <div className="min-h-screen flex flex-col">

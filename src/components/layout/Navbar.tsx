@@ -40,6 +40,7 @@ const Navbar = () => {
   };
 
   const handleNavigation = (path: string) => {
+    console.log(`Navigating to: ${path}`);
     navigate(path);
     setIsMenuOpen(false);
   };
@@ -51,6 +52,7 @@ const Navbar = () => {
 
   // Handle the "Go to Dashboard" action
   const handleDashboardNavigation = () => {
+    console.log('Dashboard navigation triggered, auth state:', { isAuthenticated, profile });
     if (isAuthenticated) {
       if (profile?.role === 'patient') {
         navigate('/patient/overview');
@@ -62,6 +64,18 @@ const Navbar = () => {
     } else {
       navigate('/auth/register');
     }
+    setIsMenuOpen(false);
+  };
+
+  const handleLoginClick = () => {
+    console.log('Login button clicked, navigating to /auth/login');
+    navigate('/auth/login');
+    setIsMenuOpen(false);
+  };
+
+  const handleRegisterClick = () => {
+    console.log('Register button clicked, navigating to /auth/register');
+    navigate('/auth/register');
     setIsMenuOpen(false);
   };
 
@@ -143,11 +157,11 @@ const Navbar = () => {
               </>
             ) : (
               <>
-                <Button asChild variant="outline" className="rounded-full">
-                  <Link to="/auth/login">Sign In</Link>
+                <Button onClick={handleLoginClick} variant="outline" className="rounded-full">
+                  Sign In
                 </Button>
-                <Button asChild className="rounded-full">
-                  <Link to="/auth/register">Get Started</Link>
+                <Button onClick={handleRegisterClick} className="rounded-full">
+                  Get Started
                 </Button>
               </>
             )}
@@ -238,15 +252,11 @@ const Navbar = () => {
                 </div>
               ) : (
                 <div className="flex-shrink-0 w-full space-y-2">
-                  <Button asChild className="w-full mb-2" variant="outline">
-                    <Link to="/auth/login" onClick={() => setIsMenuOpen(false)}>
-                      Sign In
-                    </Link>
+                  <Button onClick={handleLoginClick} className="w-full mb-2" variant="outline">
+                    Sign In
                   </Button>
-                  <Button asChild className="w-full" onClick={() => { setIsMenuOpen(false); }}>
-                    <Link to="/auth/register">
-                      Get Started
-                    </Link>
+                  <Button onClick={handleRegisterClick} className="w-full">
+                    Get Started
                   </Button>
                 </div>
               )}
