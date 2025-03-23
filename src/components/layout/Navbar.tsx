@@ -1,7 +1,7 @@
 
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Menu, X, LogOut, User } from 'lucide-react';
+import { Menu, X, LogOut, User, LayoutDashboard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
@@ -34,8 +34,8 @@ const Navbar = () => {
     return null;
   }
 
-  // Handle the "Get Started" action
-  const handleGetStarted = () => {
+  // Handle the "Go to Dashboard" action
+  const handleDashboardNavigation = () => {
     if (isAuthenticated) {
       if (profile?.role === 'patient') {
         navigate('/patient/overview');
@@ -74,32 +74,7 @@ const Navbar = () => {
             >
               Home
             </Link>
-            {isAuthenticated && profile?.role === 'patient' && (
-              <Link 
-                to="/patient/overview" 
-                className={cn(
-                  "text-sm font-medium transition-colors px-4 py-2 rounded-full",
-                  isActive("/patient/overview") 
-                    ? "bg-primary text-white" 
-                    : "bg-primary/10 text-foreground/80 hover:bg-primary hover:text-white"
-                )}
-              >
-                Dashboard
-              </Link>
-            )}
-            {isAuthenticated && profile?.role === 'doctor' && (
-              <Link 
-                to="/dashboard/doctor" 
-                className={cn(
-                  "text-sm font-medium transition-colors px-4 py-2 rounded-full",
-                  isActive("/dashboard/doctor") 
-                    ? "bg-primary text-white" 
-                    : "bg-primary/10 text-foreground/80 hover:bg-primary hover:text-white"
-                )}
-              >
-                Dashboard
-              </Link>
-            )}
+            
             <Link 
               to="/about" 
               className={cn(
@@ -111,6 +86,7 @@ const Navbar = () => {
             >
               About
             </Link>
+            
             <Link 
               to="/features" 
               className={cn(
@@ -122,6 +98,19 @@ const Navbar = () => {
             >
               Features
             </Link>
+            
+            {isAuthenticated && (
+              <Button 
+                onClick={handleDashboardNavigation}
+                className={cn(
+                  "text-sm font-medium transition-colors px-4 py-2 rounded-full",
+                  "bg-primary text-primary-foreground hover:bg-primary/90"
+                )}
+              >
+                <LayoutDashboard className="mr-2 h-4 w-4" />
+                Dashboard
+              </Button>
+            )}
           </nav>
 
           {/* Authentication buttons */}
@@ -138,7 +127,7 @@ const Navbar = () => {
                 <Button asChild variant="outline" className="rounded-full">
                   <Link to="/auth/login">Sign In</Link>
                 </Button>
-                <Button asChild className="rounded-full" onClick={handleGetStarted}>
+                <Button asChild className="rounded-full">
                   <Link to="/auth/register">Get Started</Link>
                 </Button>
               </>
@@ -178,32 +167,7 @@ const Navbar = () => {
             >
               Home
             </button>
-            {isAuthenticated && profile?.role === 'patient' && (
-              <button 
-                onClick={() => handleNavigation("/patient/overview")}
-                className={cn(
-                  "block w-full text-left px-4 py-2 rounded-full text-base font-medium focus-ring",
-                  isActive("/patient/overview") 
-                    ? "bg-primary text-white" 
-                    : "bg-primary/10 text-foreground/80 hover:bg-primary hover:text-white"
-                )}
-              >
-                Dashboard
-              </button>
-            )}
-            {isAuthenticated && profile?.role === 'doctor' && (
-              <button
-                onClick={() => handleNavigation("/dashboard/doctor")}
-                className={cn(
-                  "block w-full text-left px-4 py-2 rounded-full text-base font-medium focus-ring",
-                  isActive("/dashboard/doctor") 
-                    ? "bg-primary text-white" 
-                    : "bg-primary/10 text-foreground/80 hover:bg-primary hover:text-white"
-                )}
-              >
-                Dashboard
-              </button>
-            )}
+            
             <button
               onClick={() => handleNavigation("/about")}
               className={cn(
@@ -215,6 +179,7 @@ const Navbar = () => {
             >
               About
             </button>
+            
             <button
               onClick={() => handleNavigation("/features")}
               className={cn(
@@ -226,6 +191,19 @@ const Navbar = () => {
             >
               Features
             </button>
+            
+            {isAuthenticated && (
+              <button
+                onClick={handleDashboardNavigation}
+                className={cn(
+                  "flex items-center w-full text-left px-4 py-2 rounded-full text-base font-medium focus-ring",
+                  "bg-primary text-primary-foreground hover:bg-primary/90"
+                )}
+              >
+                <LayoutDashboard className="mr-2 h-5 w-5" />
+                Dashboard
+              </button>
+            )}
           </div>
           <div className="pt-4 pb-3 border-t border-border">
             <div className="flex items-center px-5">
@@ -246,7 +224,7 @@ const Navbar = () => {
                       Sign In
                     </Link>
                   </Button>
-                  <Button asChild className="w-full" onClick={() => { setIsMenuOpen(false); handleGetStarted(); }}>
+                  <Button asChild className="w-full" onClick={() => { setIsMenuOpen(false); }}>
                     <Link to="/auth/register">
                       Get Started
                     </Link>

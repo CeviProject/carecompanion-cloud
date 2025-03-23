@@ -1,6 +1,6 @@
 
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, LayoutDashboard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
@@ -40,6 +40,16 @@ const Index = () => {
     }
   };
 
+  const handleDashboardNavigation = () => {
+    if (isAuthenticated && profile) {
+      if (profile.role === 'patient') {
+        navigate('/patient/overview');
+      } else if (profile.role === 'doctor') {
+        navigate('/dashboard/doctor');
+      }
+    }
+  };
+
   useEffect(() => {
     if (!loading && isAuthenticated && profile) {
       console.log('Auto-redirecting authenticated user to dashboard');
@@ -62,7 +72,7 @@ const Index = () => {
                 Connect with licensed doctors online, get prescriptions, and access personalized healthcare from the comfort of your home.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                {!isAuthenticated && (
+                {!isAuthenticated ? (
                   <Button
                     onClick={handleGetStarted}
                     size="lg"
@@ -70,6 +80,15 @@ const Index = () => {
                   >
                     Get Started
                     <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={handleDashboardNavigation}
+                    size="lg"
+                    className="rounded-full px-8 text-lg group bg-primary text-primary-foreground"
+                  >
+                    Go to Dashboard
+                    <LayoutDashboard className="ml-2 h-5 w-5" />
                   </Button>
                 )}
                 <Button
@@ -127,13 +146,21 @@ const Index = () => {
               <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
                 Join thousands of patients who have already made the switch to virtual healthcare.
               </p>
-              {!isAuthenticated && (
+              {!isAuthenticated ? (
                 <Button
                   onClick={handleGetStarted}
                   size="lg"
                   className="rounded-full px-8 text-lg"
                 >
                   Get Started Today
+                </Button>
+              ) : (
+                <Button
+                  onClick={handleDashboardNavigation}
+                  size="lg"
+                  className="rounded-full px-8 text-lg"
+                >
+                  Access Your Dashboard
                 </Button>
               )}
             </div>
