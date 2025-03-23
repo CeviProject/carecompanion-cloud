@@ -29,7 +29,7 @@ serve(async (req) => {
       );
     }
 
-    console.log("Received authorization header:", authHeader ? "Present" : "Missing");
+    console.log("Authorization header verified");
 
     if (!GEMINI_API_KEY) {
       console.error("GEMINI_API_KEY environment variable not set");
@@ -39,13 +39,11 @@ serve(async (req) => {
       );
     }
 
-    console.log("Received request to generate health tip");
-    
     // Parse request body and handle potential errors
     let requestData;
     try {
       requestData = await req.json();
-      console.log("Request data parsed successfully:", JSON.stringify(requestData));
+      console.log("Request data received:", JSON.stringify(requestData).substring(0, 500));
     } catch (parseError) {
       console.error("Failed to parse request body:", parseError);
       return new Response(
@@ -65,7 +63,7 @@ serve(async (req) => {
     }
 
     console.log("Generating tip for user:", user_id);
-    console.log("Recent health issues:", recentIssues ? JSON.stringify(recentIssues).substring(0, 100) + "..." : "Not available");
+    console.log("Recent health issues:", recentIssues ? JSON.stringify(recentIssues).substring(0, 200) : "Not available");
     
     // Determine if we should generate a contextual tip or general tip
     const isContextual = Array.isArray(recentIssues) && recentIssues.length > 0;
@@ -102,8 +100,11 @@ serve(async (req) => {
     console.log("Calling Gemini AI API");
 
     try {
-      // Call Gemini AI API
-      const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+      // Call Gemini AI API with proper error handling
+      const url = `${GEMINI_API_URL}?key=${GEMINI_API_KEY}`;
+      console.log("Gemini API URL:", url.split("?")[0]); // Log URL without the API key
+      
+      const geminiResponse = await fetch(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -121,25 +122,44 @@ serve(async (req) => {
         }),
       });
 
-      console.log("Gemini API response status:", response.status);
+      console.log("Gemini API response status:", geminiResponse.status);
 
-      if (!response.ok) {
-        const errorText = await response.text();
+      if (!geminiResponse.ok) {
+        const errorText = await geminiResponse.text();
         console.error("Gemini API error details:", errorText);
-        console.error("Gemini API response status:", response.status);
         return new Response(
-          JSON.stringify({ success: false, message: `Gemini API error: ${response.status} ${errorText}` }),
+          JSON.stringify({ 
+            success: false, 
+            message: `Gemini API error: ${geminiResponse.status}`,
+            details: errorText 
+          }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
-      const data = await response.json();
+      const data = await geminiResponse.json();
       console.log("Received response from Gemini API");
       
-      if (!data.candidates || !data.candidates[0] || !data.candidates[0].content || !data.candidates[0].content.parts || !data.candidates[0].content.parts[0]) {
-        console.error("Unexpected Gemini API response format:", JSON.stringify(data));
+      if (!data.candidates || data.candidates.length === 0) {
+        console.error("No candidates in Gemini API response:", JSON.stringify(data));
         return new Response(
-          JSON.stringify({ success: false, message: "Unexpected Gemini API response format" }),
+          JSON.stringify({ 
+            success: false, 
+            message: "No candidates in Gemini API response",
+            details: JSON.stringify(data)
+          }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      if (!data.candidates[0].content || !data.candidates[0].content.parts || data.candidates[0].content.parts.length === 0) {
+        console.error("Missing content in Gemini API response:", JSON.stringify(data.candidates[0]));
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            message: "Missing content in Gemini API response",
+            details: JSON.stringify(data.candidates[0])
+          }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
@@ -198,9 +218,14 @@ serve(async (req) => {
           }
         }
         
-        // Ensure we have valid content
+        // Last resort if all parsing fails
         if (!tipContent || !tipContent.title || !tipContent.content) {
-          throw new Error("Could not extract valid tip content");
+          console.log("All parsing methods failed. Using manual extraction.");
+          // Create a simple title and use the entire text as content
+          tipContent = {
+            title: isContextual ? "Personalized Health Advice" : "General Wellness Tip",
+            content: generatedText.substring(0, 500) // Limit content length
+          };
         }
         
         // Sanitize the content (remove any remaining quotes or JSON artifacts)
@@ -211,7 +236,11 @@ serve(async (req) => {
         console.error("Error parsing Gemini response:", parseError);
         console.error("Raw response text:", generatedText);
         return new Response(
-          JSON.stringify({ success: false, message: "Failed to parse the generated health tip" }),
+          JSON.stringify({ 
+            success: false, 
+            message: "Failed to parse the generated health tip",
+            rawResponse: generatedText.substring(0, 500)
+          }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
@@ -231,7 +260,10 @@ serve(async (req) => {
     } catch (apiError) {
       console.error("Error calling Gemini API:", apiError);
       return new Response(
-        JSON.stringify({ success: false, message: "Error calling Gemini API: " + apiError.message }),
+        JSON.stringify({ 
+          success: false, 
+          message: "Error calling Gemini API: " + apiError.message 
+        }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }

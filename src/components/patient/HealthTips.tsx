@@ -134,7 +134,7 @@ const HealthTips = () => {
         .select('query_text, patient_data, ai_assessment')
         .eq('patient_id', user?.id)
         .order('created_at', { ascending: false })
-        .limit(3);
+        .limit(5);
 
       if (error) throw error;
 
@@ -142,28 +142,40 @@ const HealthTips = () => {
       
       if (data && data.length > 0) {
         const issues = data.map(item => {
-          // First, try to get symptoms from patient_data
-          if (item.patient_data && typeof item.patient_data === 'object') {
-            if ('symptoms' in item.patient_data) {
-              return (item.patient_data as any).symptoms;
+          // Extract query text as the primary source of health issues
+          let issueText = item.query_text || '';
+          
+          // If AI assessment is available, try to extract key information
+          if (item.ai_assessment) {
+            try {
+              // Try parsing as JSON first
+              let assessment;
+              if (typeof item.ai_assessment === 'string') {
+                try {
+                  assessment = JSON.parse(item.ai_assessment);
+                } catch (e) {
+                  // If not valid JSON, use as-is
+                  assessment = item.ai_assessment;
+                }
+              } else {
+                assessment = item.ai_assessment;
+              }
+              
+              // Use assessment data if available
+              if (assessment && typeof assessment === 'object') {
+                if (assessment.assessment) {
+                  issueText = assessment.assessment.toString().substring(0, 200);
+                } else if (assessment.condition) {
+                  issueText = assessment.condition.toString().substring(0, 200);
+                }
+              }
+            } catch (e) {
+              console.log('Error parsing AI assessment:', e);
             }
           }
           
-          // Next, try to extract from AI assessment - Fix the TypeScript error
-          if (item.ai_assessment && typeof item.ai_assessment === 'object') {
-            if ('assessment' in (item.ai_assessment as object)) {
-              return (item.ai_assessment as any).assessment;
-            }
-            // If there's a reasonable string alternative, use that
-            const assessmentStr = JSON.stringify(item.ai_assessment);
-            if (assessmentStr.length < 200) {
-              return assessmentStr;
-            }
-          }
-          
-          // Fallback to query text
-          return item.query_text;
-        });
+          return issueText;
+        }).filter(Boolean); // Remove any empty strings
         
         console.log('Processed health issues:', issues);
         setRecentHealthIssues(issues);
@@ -279,7 +291,7 @@ const HealthTips = () => {
         throw new Error('Authentication error: ' + sessionError.message);
       }
       
-      if (!sessionData.session?.access_token) {
+      if (!sessionData || !sessionData.session?.access_token) {
         console.error('No access token available');
         throw new Error('No authentication token available. Please log in again.');
       }
@@ -289,18 +301,18 @@ const HealthTips = () => {
       const { data, error } = await supabase.functions.invoke('generate-health-tip', {
         body: contextData,
         headers: {
-          Authorization: `Bearer ${sessionData.session?.access_token}`
+          Authorization: `Bearer ${sessionData.session.access_token}`
         }
       });
       
-      console.log('Function response:', data, error);
-
+      console.log('Function response:', data);
+      
       if (error) {
         console.error('Function error details:', error);
         throw error;
       }
       
-      if (data && data.success) {
+      if (data && data.success && data.tip) {
         const { data: newTip, error: insertError } = await supabase
           .from('health_tips')
           .insert({
@@ -340,6 +352,9 @@ const HealthTips = () => {
     try {
       setIsGeneratingContextual(true);
       
+      // Ensure we have the latest health issues
+      await fetchRecentHealthIssues();
+      
       if (recentHealthIssues.length === 0) {
         toast({
           title: "Info",
@@ -356,8 +371,10 @@ const HealthTips = () => {
       
       const contextData = {
         user_id: user?.id,
-        recentIssues: recentHealthIssues.length > 0 ? recentHealthIssues : []
+        recentIssues: recentHealthIssues
       };
+      
+      console.log('Context data for personalized tip:', JSON.stringify(contextData));
       
       // Get the current session to access the JWT token
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
@@ -367,29 +384,35 @@ const HealthTips = () => {
         throw new Error('Authentication error: ' + sessionError.message);
       }
       
-      if (!sessionData.session?.access_token) {
+      if (!sessionData || !sessionData.session?.access_token) {
         console.error('No access token available');
         throw new Error('No authentication token available. Please log in again.');
       }
       
+      const accessToken = sessionData.session.access_token;
+      console.log('Access token available:', !!accessToken);
       console.log('Invoking generate-health-tip function with auth token and context data:', 
         JSON.stringify(contextData).substring(0, 200));
       
       const { data, error } = await supabase.functions.invoke('generate-health-tip', {
         body: contextData,
         headers: {
-          Authorization: `Bearer ${sessionData.session?.access_token}`
+          Authorization: `Bearer ${accessToken}`
         }
       });
       
-      console.log('Function response:', data);
-
       if (error) {
         console.error('Function error details:', error);
         throw error;
       }
       
-      if (data && data.success) {
+      console.log('Function response:', data);
+      
+      if (!data) {
+        throw new Error('No response from generate-health-tip function');
+      }
+      
+      if (data && data.success && data.tip) {
         const { data: newTip, error: insertError } = await supabase
           .from('health_tips')
           .insert({
