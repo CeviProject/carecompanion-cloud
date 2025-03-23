@@ -8,7 +8,6 @@ import {
   Pill, 
   Search, 
   ActivitySquare, 
-  Lightbulb, 
   UserRound,
   Menu,
   X,
@@ -26,8 +25,7 @@ const PatientNavbar = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notifications, setNotifications] = useState({
     appointments: 0,
-    medications: 0,
-    healthTips: 0
+    medications: 0
   });
 
   const isActive = (path: string) => {
@@ -67,20 +65,6 @@ const PatientNavbar = () => {
         if (!medError) {
           setNotifications(prev => ({ ...prev, medications: medsCount || 0 }));
         }
-
-        // Count new health tips
-        const lastWeek = new Date(today);
-        lastWeek.setDate(lastWeek.getDate() - 7);
-        
-        const { count: tipsCount, error: tipsError } = await supabase
-          .from('health_tips')
-          .select('id', { count: 'exact', head: true })
-          .gt('created_at', lastWeek.toISOString())
-          .eq('is_public', true);
-
-        if (!tipsError) {
-          setNotifications(prev => ({ ...prev, healthTips: tipsCount || 0 }));
-        }
       } catch (error) {
         console.error('Error fetching notifications:', error);
       }
@@ -109,20 +93,9 @@ const PatientNavbar = () => {
       )
       .subscribe();
 
-    const tipsChannel = supabase
-      .channel('tips-changes')
-      .on('postgres_changes', 
-        { event: 'INSERT', schema: 'public', table: 'health_tips', filter: `is_public=eq.true` },
-        () => {
-          setNotifications(prev => ({ ...prev, healthTips: prev.healthTips + 1 }));
-        }
-      )
-      .subscribe();
-
     return () => {
       supabase.removeChannel(appointmentChannel);
       supabase.removeChannel(medicationChannel);
-      supabase.removeChannel(tipsChannel);
     };
   }, [user]);
 
@@ -132,7 +105,6 @@ const PatientNavbar = () => {
     { label: 'Medications', path: '/patient/medications', icon: Pill, count: notifications.medications },
     { label: 'Health Query', path: '/patient/health-query', icon: Search },
     { label: 'Assessment', path: '/patient/assessment', icon: ActivitySquare },
-    { label: 'Health Tips', path: '/patient/health-tips', icon: Lightbulb, count: notifications.healthTips },
     { label: 'Find Doctors', path: '/patient/doctors', icon: UserRound },
   ];
 

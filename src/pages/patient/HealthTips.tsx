@@ -1,7 +1,6 @@
 
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
-import HealthTipsComponent from '@/components/patient/HealthTips';
 import PatientNavbar from '@/components/patient/PatientNavbar';
 
 const PatientHealthTips = () => {
@@ -12,13 +11,15 @@ const PatientHealthTips = () => {
         <div className="mb-6">
           <h1 className="text-3xl font-bold tracking-tight">Health Tips</h1>
           <p className="text-muted-foreground">
-            Browse useful health tips and recommendations curated for you.
+            This feature is currently unavailable.
           </p>
         </div>
         
-        <Card className="shadow-md border-t-4 border-t-primary">
-          <CardContent className="pt-6">
-            <HealthTipsComponent />
+        <Card className="shadow-md">
+          <CardContent className="pt-6 flex items-center justify-center p-10">
+            <p className="text-muted-foreground text-center">
+              The Health Tips functionality has been removed.
+            </p>
           </CardContent>
         </Card>
       </div>
