@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -127,6 +128,7 @@ const HealthTips = () => {
 
   const fetchRecentHealthIssues = async () => {
     try {
+      console.log('Fetching recent health issues for user:', user?.id);
       const { data, error } = await supabase
         .from('health_queries')
         .select('query_text, patient_data, ai_assessment')
@@ -136,17 +138,37 @@ const HealthTips = () => {
 
       if (error) throw error;
 
+      console.log('Health queries data received:', data);
+      
       if (data && data.length > 0) {
         const issues = data.map(item => {
-          let symptoms = item.query_text;
+          // First, try to get symptoms from patient_data
           if (item.patient_data && typeof item.patient_data === 'object') {
             if ('symptoms' in item.patient_data) {
-              symptoms = (item.patient_data as any).symptoms;
+              return (item.patient_data as any).symptoms;
             }
           }
-          return symptoms;
+          
+          // Next, try to extract from AI assessment
+          if (item.ai_assessment && typeof item.ai_assessment === 'object') {
+            if ('assessment' in item.ai_assessment) {
+              return (item.ai_assessment as any).assessment;
+            }
+            // If there's a reasonable string alternative, use that
+            const assessmentStr = JSON.stringify(item.ai_assessment);
+            if (assessmentStr.length < 200) {
+              return assessmentStr;
+            }
+          }
+          
+          // Fallback to query text
+          return item.query_text;
         });
+        
+        console.log('Processed health issues:', issues);
         setRecentHealthIssues(issues);
+      } else {
+        console.log('No recent health queries found');
       }
     } catch (error: any) {
       console.error('Error fetching recent health issues:', error.message);
@@ -249,7 +271,20 @@ const HealthTips = () => {
         variant: "default",
       });
       
-      const { data: sessionData } = await supabase.auth.getSession();
+      // Get the current session to access the JWT token
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) {
+        console.error('Session error:', sessionError.message);
+        throw new Error('Authentication error: ' + sessionError.message);
+      }
+      
+      if (!sessionData.session?.access_token) {
+        console.error('No access token available');
+        throw new Error('No authentication token available. Please log in again.');
+      }
+      
+      console.log('Invoking generate-health-tip function with auth token');
       
       const { data, error } = await supabase.functions.invoke('generate-health-tip', {
         body: contextData,
@@ -257,8 +292,13 @@ const HealthTips = () => {
           Authorization: `Bearer ${sessionData.session?.access_token}`
         }
       });
+      
+      console.log('Function response:', data, error);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Function error details:', error);
+        throw error;
+      }
       
       if (data && data.success) {
         const { data: newTip, error: insertError } = await supabase
@@ -319,7 +359,21 @@ const HealthTips = () => {
         recentIssues: recentHealthIssues.length > 0 ? recentHealthIssues : []
       };
       
-      const { data: sessionData } = await supabase.auth.getSession();
+      // Get the current session to access the JWT token
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) {
+        console.error('Session error:', sessionError.message);
+        throw new Error('Authentication error: ' + sessionError.message);
+      }
+      
+      if (!sessionData.session?.access_token) {
+        console.error('No access token available');
+        throw new Error('No authentication token available. Please log in again.');
+      }
+      
+      console.log('Invoking generate-health-tip function with auth token and context data:', 
+        JSON.stringify(contextData).substring(0, 200));
       
       const { data, error } = await supabase.functions.invoke('generate-health-tip', {
         body: contextData,
@@ -327,8 +381,13 @@ const HealthTips = () => {
           Authorization: `Bearer ${sessionData.session?.access_token}`
         }
       });
+      
+      console.log('Function response:', data);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Function error details:', error);
+        throw error;
+      }
       
       if (data && data.success) {
         const { data: newTip, error: insertError } = await supabase

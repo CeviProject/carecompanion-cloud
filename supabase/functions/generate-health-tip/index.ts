@@ -27,6 +27,8 @@ serve(async (req) => {
       );
     }
 
+    console.log("Received authorization header:", authHeader ? "Present" : "Missing");
+
     if (!GEMINI_API_KEY) {
       console.error("GEMINI_API_KEY environment variable not set");
       throw new Error("GEMINI_API_KEY environment variable not set");
@@ -38,6 +40,7 @@ serve(async (req) => {
     let requestData;
     try {
       requestData = await req.json();
+      console.log("Request data parsed successfully");
     } catch (parseError) {
       console.error("Failed to parse request body:", parseError);
       throw new Error("Invalid request body format");
@@ -109,6 +112,7 @@ serve(async (req) => {
     if (!response.ok) {
       const errorText = await response.text();
       console.error("Gemini API error details:", errorText);
+      console.error("Gemini API response status:", response.status);
       throw new Error(`Gemini API error: ${response.status} ${errorText}`);
     }
 
