@@ -100,34 +100,18 @@ const ElderlyHealthTips = () => {
         throw new Error('No authentication token available. Please log in again.');
       }
       
-      // Using direct fetch instead of supabase functions to avoid Edge Function errors
-      const SUPABASE_URL = "https://irkihiedlszoufsjglhw.supabase.co";
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/generate-elderly-tip`, {
-        method: 'POST',
+      const { data, error } = await supabase.functions.invoke('generate-elderly-tip', {
+        body: JSON.stringify(contextData),
         headers: {
-          'Authorization': `Bearer ${sessionData.session.access_token}`,
+          Authorization: `Bearer ${sessionData.session.access_token}`,
           'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(contextData)
+        }
       });
       
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Failed to generate tip response:', errorText);
-        
-        // Provide a fallback tip when the API fails
-        const fallbackTip = {
-          title: "Stay Hydrated",
-          content: "As we age, our sense of thirst may decrease. Remember to drink water regularly throughout the day, even when not feeling thirsty. Proper hydration helps maintain energy levels, supports kidney function, and can prevent confusion. Keep a water bottle within easy reach at all times.",
-          category: "Wellness"
-        };
-        
-        setTip(fallbackTip);
-        
-        throw new Error(`Failed to generate tip: ${response.status} ${errorText}`);
+      if (error) {
+        console.error('Function error details:', error);
+        throw error;
       }
-      
-      const data = await response.json();
       
       if (data && data.success && data.tip) {
         setTip(data.tip);
@@ -142,9 +126,9 @@ const ElderlyHealthTips = () => {
     } catch (error: any) {
       console.error('Error generating elderly tip:', error.message);
       toast({
-        title: "Note",
-        description: `Using a pre-saved health tip due to temporary service issue.`,
-        variant: "default",
+        title: "Error",
+        description: `Failed to generate tip: ${error.message}`,
+        variant: "destructive",
       });
     } finally {
       setIsLoading(false);
@@ -152,50 +136,49 @@ const ElderlyHealthTips = () => {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <h2 className="text-3xl font-bold">Health Tips</h2>
+        <h2 className="text-2xl font-bold">Elderly Health Tips</h2>
         <Button 
           variant="outline" 
           onClick={generateTip} 
           disabled={isLoading}
-          className="bg-gradient-to-r from-blue-100 to-green-100 hover:from-blue-200 hover:to-green-200 text-xl py-7 px-8 rounded-xl"
-          size="lg"
+          className="bg-gradient-to-r from-blue-100 to-green-100 hover:from-blue-200 hover:to-green-200"
         >
           {isLoading ? (
             <>
-              <RefreshCw className="mr-4 h-6 w-6 animate-spin" />
-              <span className="text-xl">Generating...</span>
+              <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+              Generating...
             </>
           ) : (
             <>
-              <RefreshCw className="mr-4 h-6 w-6" />
-              <span className="text-xl">New Tip</span>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Generate New Tip
             </>
           )}
         </Button>
       </div>
 
       {!tip && !isLoading && (
-        <Card className="shadow-lg border-2">
-          <CardContent className="py-16">
-            <p className="text-center text-gray-500 text-2xl">No tips generated yet. Click "New Tip" to get started.</p>
+        <Card>
+          <CardContent className="py-10">
+            <p className="text-center text-gray-500">No tips generated yet. Click "Generate New Tip" to get started.</p>
           </CardContent>
         </Card>
       )}
 
       {tip && (
-        <Card className="transition-all duration-300 hover:shadow-xl border-t-4 border-t-green-500 shadow-lg">
-          <CardHeader className="pb-4">
-            <CardTitle className="text-3xl text-green-800">{tip.title}</CardTitle>
+        <Card className="transition-all duration-300 hover:shadow-md border-t-4 border-t-green-500">
+          <CardHeader>
+            <CardTitle className="text-xl text-green-800">{tip.title}</CardTitle>
             {tip.category && (
-              <CardDescription className="text-green-600 text-xl">
+              <CardDescription className="text-green-600">
                 {tip.category}
               </CardDescription>
             )}
           </CardHeader>
           <CardContent>
-            <p className="whitespace-pre-line text-2xl leading-relaxed">{tip.content}</p>
+            <p className="whitespace-pre-line">{tip.content}</p>
           </CardContent>
         </Card>
       )}

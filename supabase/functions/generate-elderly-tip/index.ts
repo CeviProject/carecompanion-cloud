@@ -10,35 +10,6 @@ const corsHeaders = {
 const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
 const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent";
 
-// Fallback tips in case the API fails
-const fallbackTips = [
-  {
-    title: "Stay Hydrated",
-    content: "As we age, our sense of thirst may decrease. Remember to drink water regularly throughout the day, even when not feeling thirsty. Proper hydration helps maintain energy levels, supports kidney function, and can prevent confusion. Keep a water bottle within easy reach at all times.",
-    category: "Wellness"
-  },
-  {
-    title: "Fall Prevention",
-    content: "Remove tripping hazards like loose rugs and cords from walkways. Install grab bars in the bathroom and ensure good lighting throughout your home, especially on staircases. Wear supportive, non-slip footwear, and consider using a cane or walker if you experience unsteadiness.",
-    category: "Safety"
-  },
-  {
-    title: "Medication Management",
-    content: "Keep a current list of all medications, including over-the-counter drugs and supplements. Use pill organizers to sort medications by day and time. Set alarms as reminders, and never skip doses without consulting your healthcare provider. Review all medications with your doctor at least once a year.",
-    category: "Medication"
-  },
-  {
-    title: "Heart-Healthy Eating",
-    content: "Focus on a diet rich in fruits, vegetables, whole grains, and lean proteins. Limit sodium, saturated fats, and added sugars. Choose healthy fats from sources like olive oil, avocados, and nuts. Keeping your heart healthy helps maintain overall wellness and independence as you age.",
-    category: "Nutrition"
-  },
-  {
-    title: "Stay Socially Active",
-    content: "Regular social interaction is vital for mental health. Stay connected with family and friends through regular visits, phone calls, or video chats. Consider joining community centers, clubs, or volunteer organizations that match your interests to maintain meaningful social connections.",
-    category: "Mental Health"
-  }
-];
-
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -60,15 +31,9 @@ serve(async (req) => {
 
     if (!GEMINI_API_KEY) {
       console.error("GEMINI_API_KEY environment variable not set");
-      // Return a fallback tip
-      const randomTip = fallbackTips[Math.floor(Math.random() * fallbackTips.length)];
       return new Response(
-        JSON.stringify({ 
-          success: true, 
-          tip: randomTip,
-          fromFallback: true
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ success: false, message: "GEMINI_API_KEY environment variable not set" }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -81,15 +46,9 @@ serve(async (req) => {
       console.log("Request data parsed successfully");
     } catch (parseError) {
       console.error("Failed to parse request body:", parseError);
-      // Return a fallback tip
-      const randomTip = fallbackTips[Math.floor(Math.random() * fallbackTips.length)];
       return new Response(
-        JSON.stringify({ 
-          success: true, 
-          tip: randomTip,
-          fromFallback: true
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ success: false, message: "Invalid request body format", error: parseError.message }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
     
@@ -188,16 +147,13 @@ serve(async (req) => {
       if (!geminiResponse.ok) {
         const errorText = await geminiResponse.text();
         console.error("Gemini API error details:", errorText);
-        
-        // Use a fallback tip when API fails
-        const randomTip = fallbackTips[Math.floor(Math.random() * fallbackTips.length)];
         return new Response(
           JSON.stringify({ 
-            success: true, 
-            tip: randomTip,
-            fromFallback: true
+            success: false, 
+            message: `Gemini API error: ${geminiResponse.status}`,
+            details: errorText 
           }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
@@ -205,16 +161,13 @@ serve(async (req) => {
       
       if (!data.candidates || data.candidates.length === 0) {
         console.error("No candidates in Gemini API response:", JSON.stringify(data));
-        
-        // Use a fallback tip
-        const randomTip = fallbackTips[Math.floor(Math.random() * fallbackTips.length)];
         return new Response(
           JSON.stringify({ 
-            success: true, 
-            tip: randomTip,
-            fromFallback: true
+            success: false, 
+            message: "No candidates in Gemini API response",
+            details: JSON.stringify(data)
           }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
       
@@ -276,34 +229,31 @@ serve(async (req) => {
         
         // Last resort if all parsing fails
         if (!tipContent || !tipContent.title || !tipContent.content) {
-          console.log("All parsing methods failed. Using fallback tip.");
-          
-          // Use a pre-defined fallback tip
-          const randomTip = fallbackTips[Math.floor(Math.random() * fallbackTips.length)];
-          tipContent = randomTip;
+          console.log("All parsing methods failed. Using manual extraction.");
+          // Create a simple title and use the entire text as content
+          tipContent = {
+            title: "Elderly Health Advice",
+            content: generatedText.substring(0, 500), // Limit content length
+            category: "General"
+          };
         }
         
-        // Sanitize the content if needed (remove any remaining quotes or JSON artifacts)
-        if (tipContent !== fallbackTips[0]) {  // Only clean if it's not already a fallback tip
-          tipContent.title = tipContent.title.replace(/^["']+|["']+$/g, '');
-          tipContent.content = tipContent.content.replace(/^["']+|["']+$/g, '');
-          if (tipContent.category) {
-            tipContent.category = tipContent.category.replace(/^["']+|["']+$/g, '');
-          }
+        // Sanitize the content (remove any remaining quotes or JSON artifacts)
+        tipContent.title = tipContent.title.replace(/^["']+|["']+$/g, '');
+        tipContent.content = tipContent.content.replace(/^["']+|["']+$/g, '');
+        if (tipContent.category) {
+          tipContent.category = tipContent.category.replace(/^["']+|["']+$/g, '');
         }
         
       } catch (parseError) {
         console.error("Error parsing Gemini response:", parseError);
-        
-        // Use a fallback tip
-        const randomTip = fallbackTips[Math.floor(Math.random() * fallbackTips.length)];
         return new Response(
           JSON.stringify({ 
-            success: true, 
-            tip: randomTip,
-            fromFallback: true
+            success: false, 
+            message: "Failed to parse the generated health tip",
+            rawResponse: generatedText.substring(0, 500)
           }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
@@ -320,30 +270,23 @@ serve(async (req) => {
       );
     } catch (apiError) {
       console.error("Error calling Gemini API:", apiError);
-      
-      // Use a fallback tip when API fails
-      const randomTip = fallbackTips[Math.floor(Math.random() * fallbackTips.length)];
       return new Response(
         JSON.stringify({ 
-          success: true, 
-          tip: randomTip,
-          fromFallback: true 
+          success: false, 
+          message: "Error calling Gemini API: " + apiError.message 
         }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
   } catch (error) {
     console.error("Uncaught error in generate-elderly-tip function:", error);
-    
-    // Use a fallback tip on any error
-    const randomTip = fallbackTips[Math.floor(Math.random() * fallbackTips.length)];
     return new Response(
       JSON.stringify({
-        success: true,
-        tip: randomTip,
-        fromFallback: true
+        success: false,
+        message: error.message || "Unknown error occurred",
       }),
       {
+        status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );

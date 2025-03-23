@@ -1,16 +1,15 @@
-
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Form, FormField, FormItem, FormLabel, FormControl } from '@/components/ui/form';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
-import { Loader2, AlertCircle, HelpCircle } from 'lucide-react';
+import { Loader2, AlertCircle } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface HealthQueryFormProps {
   onQuerySubmitted?: (queryData: any) => void;
@@ -66,42 +65,21 @@ const HealthQueryForm = ({ onQuerySubmitted }: HealthQueryFormProps) => {
       };
       
       console.log('Prepared patient data:', patientData);
+      console.log('Calling health-assessment edge function');
       
-      // Get authentication token
-      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-      
-      if (sessionError) {
-        throw new Error('Authentication error: ' + sessionError.message);
-      }
-      
-      if (!sessionData || !sessionData.session?.access_token) {
-        throw new Error('No authentication token available. Please log in again.');
-      }
-      
-      // Using direct fetch instead of supabase functions
-      const SUPABASE_URL = "https://irkihiedlszoufsjglhw.supabase.co";
-      console.log('Calling health-assessment endpoint directly via fetch');
-      
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/health-assessment`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${sessionData.session.access_token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ 
+      const { data: aiData, error: aiError } = await supabase.functions.invoke('health-assessment', {
+        body: { 
           healthQuery: values.queryText,
           patientData
-        })
+        }
       });
       
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Error response from health-assessment endpoint:', errorText);
-        throw new Error(`Health assessment failed: ${response.status} ${errorText}`);
-      }
+      console.log('Edge function response:', { data: aiData ? 'Data received' : 'No data', error: aiError });
       
-      const aiData = await response.json();
-      console.log('Direct fetch response:', aiData ? 'Data received' : 'No data');
+      if (aiError) {
+        console.error('Error from health-assessment function:', aiError);
+        throw new Error(`AI assessment failed: ${aiError.message}`);
+      }
       
       if (!aiData) {
         console.error('No data returned from health-assessment function');
@@ -138,8 +116,7 @@ const HealthQueryForm = ({ onQuerySubmitted }: HealthQueryFormProps) => {
         onQuerySubmitted({
           ...queryData,
           suggestedSpecialties: aiData.suggestedSpecialties,
-          recommendedHospitals: aiData.recommendedHospitals,
-          fromFallback: aiData.fromFallback
+          recommendedHospitals: aiData.recommendedHospitals
         });
       }
     } catch (error: any) {
@@ -152,41 +129,29 @@ const HealthQueryForm = ({ onQuerySubmitted }: HealthQueryFormProps) => {
   };
 
   return (
-    <div className="glass-card p-8 rounded-xl">
-      <h2 className="text-3xl font-semibold mb-6">Describe Your Health Concern</h2>
+    <div className="glass-card p-6">
+      <h2 className="text-xl font-semibold mb-4">Describe Your Health Concern</h2>
       
       {error && (
-        <Alert variant="destructive" className="mb-6 text-lg">
-          <AlertCircle className="h-6 w-6" />
-          <AlertDescription className="text-lg ml-2">{error}</AlertDescription>
+        <Alert variant="destructive" className="mb-4">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
       
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-8">
+        <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
           <FormField
             control={form.control}
             name="queryText"
             render={({ field }) => (
-              <FormItem className="space-y-4">
-                <div className="flex items-center gap-2">
-                  <FormLabel className="text-2xl font-medium">What symptoms are you experiencing?</FormLabel>
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <HelpCircle className="h-6 w-6 text-primary cursor-help" />
-                      </TooltipTrigger>
-                      <TooltipContent className="text-lg p-4 max-w-md">
-                        Please describe any symptoms, pain, or health concerns you're having in as much detail as possible.
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </div>
+              <FormItem className="space-y-2">
+                <FormLabel>What symptoms are you experiencing?</FormLabel>
                 <FormControl>
                   <Textarea
                     placeholder="Describe your symptoms, concerns, or health questions in detail..."
-                    rows={6}
-                    className="resize-none text-xl p-6 rounded-xl"
+                    rows={4}
+                    className="resize-none"
                     required
                     disabled={isLoading}
                     {...field}
@@ -196,19 +161,18 @@ const HealthQueryForm = ({ onQuerySubmitted }: HealthQueryFormProps) => {
             )}
           />
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <FormField
               control={form.control}
               name="age"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-2xl font-medium">Age</FormLabel>
+                  <FormLabel>Age</FormLabel>
                   <FormControl>
                     <Input 
                       type="number" 
                       placeholder="Enter your age" 
                       disabled={isLoading}
-                      className="text-xl p-6 h-16 rounded-xl"
                       {...field}
                     />
                   </FormControl>
@@ -221,10 +185,10 @@ const HealthQueryForm = ({ onQuerySubmitted }: HealthQueryFormProps) => {
               name="gender"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-2xl font-medium">Gender</FormLabel>
+                  <FormLabel>Gender</FormLabel>
                   <FormControl>
                     <select 
-                      className="flex h-16 w-full rounded-xl border border-input bg-background px-6 py-2 text-xl ring-offset-background file:border-0 file:bg-transparent file:text-xl file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                       disabled={isLoading}
                       {...field}
                     >
@@ -244,12 +208,11 @@ const HealthQueryForm = ({ onQuerySubmitted }: HealthQueryFormProps) => {
             name="location"
             render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-2xl font-medium">Location (City, Country)</FormLabel>
+                <FormLabel>Location (City, Country)</FormLabel>
                 <FormControl>
                   <Input 
                     placeholder="e.g., New York, USA" 
                     disabled={isLoading}
-                    className="text-xl p-6 h-16 rounded-xl"
                     {...field} 
                   />
                 </FormControl>
@@ -262,24 +225,12 @@ const HealthQueryForm = ({ onQuerySubmitted }: HealthQueryFormProps) => {
             name="medicalHistory"
             render={({ field }) => (
               <FormItem>
-                <div className="flex items-center gap-2">
-                  <FormLabel className="text-2xl font-medium">Relevant Medical History (Optional)</FormLabel>
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <HelpCircle className="h-6 w-6 text-primary cursor-help" />
-                      </TooltipTrigger>
-                      <TooltipContent className="text-lg p-4 max-w-md">
-                        Include any chronic conditions, allergies, medications, or past surgeries that may be relevant.
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </div>
+                <FormLabel>Relevant Medical History (Optional)</FormLabel>
                 <FormControl>
                   <Textarea
                     placeholder="Any relevant medical conditions, allergies, or medications..."
-                    rows={4}
-                    className="resize-none text-xl p-6 rounded-xl"
+                    rows={2}
+                    className="resize-none"
                     disabled={isLoading}
                     {...field}
                   />
@@ -290,21 +241,20 @@ const HealthQueryForm = ({ onQuerySubmitted }: HealthQueryFormProps) => {
           
           <Button 
             type="submit" 
-            className="w-full rounded-xl text-2xl py-8 mt-6 font-medium" 
-            size="lg"
+            className="w-full rounded-full" 
             disabled={isLoading}
           >
             {isLoading ? (
               <>
-                <Loader2 className="mr-4 h-8 w-8 animate-spin" />
-                Analyzing with AI...
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Analyzing with Gemini AI...
               </>
             ) : (
               'Get AI Assessment'
             )}
           </Button>
           
-          <p className="text-xl text-muted-foreground text-center mt-6 font-medium bg-amber-50 p-4 rounded-lg border border-amber-200">
+          <p className="text-xs text-muted-foreground text-center mt-2">
             This AI assessment is not a substitute for professional medical advice.
             Always consult with a healthcare provider for medical concerns.
           </p>

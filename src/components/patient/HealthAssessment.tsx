@@ -1,8 +1,7 @@
 
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Brain, Building, MapPin, AlertTriangle } from 'lucide-react';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Brain, Building, MapPin } from 'lucide-react';
 
 interface Hospital {
   name: string;
@@ -26,7 +25,6 @@ interface HealthAssessmentProps {
   recommendedHospitals?: Hospital[] | null;
   minimalView?: boolean;
   queryData?: HealthQuery;
-  fromFallback?: boolean;
 }
 
 const HealthAssessment = ({ 
@@ -34,8 +32,7 @@ const HealthAssessment = ({
   suggestedSpecialties,
   recommendedHospitals,
   minimalView = false,
-  queryData,
-  fromFallback = false
+  queryData
 }: HealthAssessmentProps) => {
   if (!assessment && !minimalView) return null;
   
@@ -45,27 +42,27 @@ const HealthAssessment = ({
     return text.split('\n').filter(line => line.trim() !== '').map((paragraph, index) => {
       // Check if it's a heading (numbered list with a colon)
       if (/^\d+\..*:/.test(paragraph)) {
-        return <h3 key={index} className="text-xl font-medium mt-6 mb-3">{paragraph}</h3>;
+        return <h3 key={index} className="text-md font-medium mt-4 mb-2">{paragraph}</h3>;
       }
       
       // Check if it's a bullet point (asterisk or dash)
       if (/^[\*\-]\s/.test(paragraph)) {
         return (
-          <li key={index} className="ml-8 mb-3 text-lg list-disc">
+          <li key={index} className="ml-5 mb-2 text-sm">
             {paragraph.replace(/^[\*\-]\s/, '')}
           </li>
         );
       }
       
       // Regular paragraph
-      return <p key={index} className="mb-4 text-lg">{paragraph}</p>;
+      return <p key={index} className="mb-3 text-sm">{paragraph}</p>;
     });
   };
   
   if (minimalView) {
     return (
-      <div className="text-center p-6">
-        <p className="text-xl text-muted-foreground">
+      <div className="text-center p-4">
+        <p className="text-sm text-muted-foreground">
           Use the health query feature to get an AI-powered health assessment
         </p>
       </div>
@@ -73,40 +70,29 @@ const HealthAssessment = ({
   }
   
   return (
-    <Card className="glass-card p-8 space-y-6 shadow-lg">
+    <Card className="glass-card p-6 space-y-4">
       <div>
-        <div className="flex items-center mb-4">
-          <Brain className="h-8 w-8 text-primary mr-3" />
-          <h2 className="text-3xl font-semibold">AI Health Assessment</h2>
+        <div className="flex items-center mb-2">
+          <Brain className="h-5 w-5 text-primary mr-2" />
+          <h2 className="text-xl font-semibold">AI Health Assessment</h2>
         </div>
-        
-        {fromFallback && (
-          <Alert variant="destructive" className="mb-6 bg-amber-50 border-amber-300">
-            <AlertTriangle className="h-6 w-6 text-amber-600" />
-            <AlertDescription className="text-lg ml-2 text-amber-800">
-              This is a general assessment. Our AI service is currently experiencing issues. For the most accurate advice, please consult a healthcare professional.
-            </AlertDescription>
-          </Alert>
-        )}
-        
-        <p className="text-muted-foreground text-xl mb-6 bg-blue-50 p-4 rounded-lg border border-blue-100">
+        <p className="text-muted-foreground text-sm mb-4">
           This assessment is for informational purposes only and not a medical diagnosis.
-          Always consult with a qualified healthcare professional.
         </p>
         
         {assessment && (
-          <div className="border-l-4 border-primary pl-6 py-4 overflow-auto max-h-[600px] pr-4 bg-white rounded-r-lg">
+          <div className="border-l-4 border-primary pl-4 py-2 overflow-auto max-h-[500px] pr-2">
             {formatAssessment(assessment)}
           </div>
         )}
       </div>
       
       {suggestedSpecialties && suggestedSpecialties.length > 0 && (
-        <div className="mt-8">
-          <h3 className="text-2xl font-medium mb-4">Recommended Specialties</h3>
-          <div className="flex flex-wrap gap-3">
+        <div>
+          <h3 className="text-lg font-medium mb-2">Recommended Specialties</h3>
+          <div className="flex flex-wrap gap-2">
             {suggestedSpecialties.map((specialty, index) => (
-              <Badge key={index} variant="outline" className="bg-primary/10 text-lg py-2 px-4">
+              <Badge key={index} variant="outline" className="bg-primary/10">
                 {specialty}
               </Badge>
             ))}
@@ -115,21 +101,21 @@ const HealthAssessment = ({
       )}
       
       {recommendedHospitals && recommendedHospitals.length > 0 && (
-        <div className="mt-8">
-          <h3 className="text-2xl font-medium mb-4">Nearby Medical Facilities</h3>
-          <div className="space-y-4">
+        <div>
+          <h3 className="text-lg font-medium mb-2">Nearby Medical Facilities</h3>
+          <div className="space-y-3">
             {recommendedHospitals.map((hospital, index) => (
-              <div key={index} className="border rounded-lg p-5 bg-card/50 hover:bg-card/80 transition-colors">
+              <div key={index} className="border rounded-lg p-3 bg-card/50">
                 <div className="flex items-start">
-                  <Building className="h-7 w-7 text-primary mr-3 mt-1" />
+                  <Building className="h-5 w-5 text-primary mr-2 mt-0.5" />
                   <div>
-                    <h4 className="font-medium text-xl">{hospital.name}</h4>
-                    <p className="text-lg text-muted-foreground flex items-center mt-2">
-                      <MapPin className="h-5 w-5 mr-2" /> 
+                    <h4 className="font-medium">{hospital.name}</h4>
+                    <p className="text-sm text-muted-foreground flex items-center mt-1">
+                      <MapPin className="h-4 w-4 mr-1" /> 
                       {hospital.address}
                     </p>
                     {hospital.specialty && (
-                      <p className="text-lg mt-2">
+                      <p className="text-xs mt-1">
                         <span className="font-medium">Specialty:</span> {hospital.specialty}
                       </p>
                     )}
