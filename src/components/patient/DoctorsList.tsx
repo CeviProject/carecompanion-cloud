@@ -37,6 +37,7 @@ const DoctorsList = () => {
     try {
       setLoading(true);
       
+      // Use a more explicit join to avoid ambiguity
       let query = supabase
         .from('doctor_profiles')
         .select(`
@@ -45,7 +46,7 @@ const DoctorsList = () => {
           years_experience,
           location,
           bio,
-          profiles:id(
+          profiles:profiles!doctor_profiles_id_fkey (
             id,
             first_name,
             last_name
@@ -77,7 +78,10 @@ const DoctorsList = () => {
       })) || [];
       
       console.log('Formatted doctors:', formattedDoctors);
-      setDoctors(formattedDoctors);
+      
+      // Filter out doctors without valid profiles to avoid null reference errors
+      const validDoctors = formattedDoctors.filter(doctor => doctor.profiles !== null);
+      setDoctors(validDoctors);
 
       // Get unique specialties for the filter
       if (specialty === 'all') {
