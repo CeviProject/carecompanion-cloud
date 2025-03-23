@@ -1,15 +1,18 @@
+
 import * as React from "react"
 import {
-  Toast,
+  Toast as ToastComponent,
   ToastActionElement,
-  ToastProps,
 } from "@/components/ui/toast"
 
-type ToasterToastProps = Toast & {
+type ToasterToastProps = {
   id: string
   title?: React.ReactNode
   description?: React.ReactNode
   action?: ToastActionElement
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+  variant?: "default" | "destructive"
 }
 
 const TOAST_LIMIT = 5
