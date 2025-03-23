@@ -42,7 +42,6 @@ const Index = () => {
 
   const navigateToDashboard = () => {
     const role = profile?.role || 'patient';
-    console.log(`Navigating to dashboard with role: ${role}`);
     if (role === 'patient') {
       navigate('/patient/overview');
     } else if (role === 'doctor') {
@@ -57,7 +56,7 @@ const Index = () => {
       console.log('Auto-redirecting authenticated user to dashboard');
       navigateToDashboard();
     }
-  }, [isAuthenticated, profile, loading]);
+  }, [isAuthenticated, profile, loading, navigate]);
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -97,16 +96,16 @@ const Index = () => {
                   variant="outline"
                   size="lg"
                   className="rounded-full px-8 text-lg h-auto py-3"
-                  onClick={() => navigate('/features')}
+                  asChild
                 >
-                  Learn More
+                  <Link to="/features">Learn More</Link>
                 </Button>
                 {!isAuthenticated && (
                   <Button
                     variant="secondary"
                     size="lg"
                     className="rounded-full px-8 text-lg font-semibold bg-gradient-to-r from-green-100 to-green-200 hover:from-green-200 hover:to-green-300 text-green-800 h-auto py-3"
-                    onClick={() => window.open("https://eldercare-bot-assistant.lovable.app/", "_blank")}
+                    onClick={() => window.location.href = "https://eldercare-bot-assistant.lovable.app/"}
                   >
                     Try For Free
                   </Button>

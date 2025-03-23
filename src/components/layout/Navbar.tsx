@@ -10,7 +10,7 @@ import SignOutButton from '@/components/auth/SignOutButton';
 const Navbar = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, profile, isAuthenticated, loading } = useAuth();
+  const { user, profile, isAuthenticated } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
@@ -40,7 +40,6 @@ const Navbar = () => {
   };
 
   const handleNavigation = (path: string) => {
-    console.log(`Navigating to: ${path}`);
     navigate(path);
     setIsMenuOpen(false);
   };
@@ -52,30 +51,17 @@ const Navbar = () => {
 
   // Handle the "Go to Dashboard" action
   const handleDashboardNavigation = () => {
-    console.log('Dashboard navigation triggered, auth state:', { isAuthenticated, profile, loading });
     if (isAuthenticated) {
       if (profile?.role === 'patient') {
         navigate('/patient/overview');
       } else if (profile?.role === 'doctor') {
         navigate('/dashboard/doctor');
       } else {
-        navigate('/dashboard/' + (profile?.role || 'patient'));
+        navigate('/auth/register');
       }
     } else {
       navigate('/auth/register');
     }
-    setIsMenuOpen(false);
-  };
-
-  const handleLoginClick = () => {
-    console.log('Login button clicked, navigating to /auth/login');
-    navigate('/auth/login');
-    setIsMenuOpen(false);
-  };
-
-  const handleRegisterClick = () => {
-    console.log('Register button clicked, navigating to /auth/register');
-    navigate('/auth/register');
     setIsMenuOpen(false);
   };
 
@@ -132,7 +118,7 @@ const Navbar = () => {
               Features
             </Link>
             
-            {isAuthenticated && !loading && (
+            {isAuthenticated && (
               <Button 
                 onClick={handleDashboardNavigation}
                 className={cn(
@@ -148,22 +134,20 @@ const Navbar = () => {
 
           {/* Authentication buttons */}
           <div className="hidden md:flex items-center space-x-4">
-            {isAuthenticated && !loading ? (
+            {isAuthenticated ? (
               <>
                 <div className="text-sm font-medium">
                   {profile?.role === 'patient' ? 'Anonymous' : `Hello, ${profile?.first_name || 'User'}`}
                 </div>
                 <SignOutButton />
               </>
-            ) : loading ? (
-              <div className="w-20 h-9 bg-gray-200 animate-pulse rounded-full"></div>
             ) : (
               <>
-                <Button onClick={handleLoginClick} variant="outline" className="rounded-full">
-                  Sign In
+                <Button asChild variant="outline" className="rounded-full">
+                  <Link to="/auth/login">Sign In</Link>
                 </Button>
-                <Button onClick={handleRegisterClick} className="rounded-full">
-                  Get Started
+                <Button asChild className="rounded-full">
+                  <Link to="/auth/register">Get Started</Link>
                 </Button>
               </>
             )}
@@ -227,7 +211,7 @@ const Navbar = () => {
               Features
             </button>
             
-            {isAuthenticated && !loading && (
+            {isAuthenticated && (
               <button
                 onClick={handleDashboardNavigation}
                 className={cn(
@@ -242,7 +226,7 @@ const Navbar = () => {
           </div>
           <div className="pt-4 pb-3 border-t border-border">
             <div className="flex items-center px-5">
-              {isAuthenticated && !loading ? (
+              {isAuthenticated ? (
                 <div className="w-full space-y-2">
                   <div className="flex items-center">
                     <User className="h-5 w-5 mr-2" />
@@ -252,15 +236,17 @@ const Navbar = () => {
                   </div>
                   <SignOutButton className="w-full" />
                 </div>
-              ) : loading ? (
-                <div className="w-full h-10 bg-gray-200 animate-pulse rounded"></div>
               ) : (
                 <div className="flex-shrink-0 w-full space-y-2">
-                  <Button onClick={handleLoginClick} className="w-full mb-2" variant="outline">
-                    Sign In
+                  <Button asChild className="w-full mb-2" variant="outline">
+                    <Link to="/auth/login" onClick={() => setIsMenuOpen(false)}>
+                      Sign In
+                    </Link>
                   </Button>
-                  <Button onClick={handleRegisterClick} className="w-full">
-                    Get Started
+                  <Button asChild className="w-full" onClick={() => { setIsMenuOpen(false); }}>
+                    <Link to="/auth/register">
+                      Get Started
+                    </Link>
                   </Button>
                 </div>
               )}
