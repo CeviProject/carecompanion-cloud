@@ -75,7 +75,12 @@ export default {
 					800: '#075985',
 					900: '#0c4a6e',
 					950: '#082f49',
-				}
+				},
+				medBlue: {
+          light: 'rgba(0, 115, 230, 0.05)',
+          DEFAULT: 'rgb(0, 115, 230)',
+          dark: 'rgb(0, 92, 184)',
+        }
 			},
 			borderRadius: {
 				lg: 'var(--radius)',

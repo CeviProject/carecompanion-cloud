@@ -1,77 +1,78 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    --background: 210 40% 98%;
-    --foreground: 222.2 84% 4.9%;
+    --background: 210 50% 99%;
+    --foreground: 220 30% 15%;
 
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 220 30% 15%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 220 30% 15%;
 
-    --primary: 195 85% 41%;
+    --primary: 210 100% 45%;
     --primary-foreground: 210 40% 98%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 210 20% 96%;
+    --secondary-foreground: 220 30% 15%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 210 20% 96%;
+    --muted-foreground: 215 15% 45%;
 
-    --accent: 195 85% 95%;
-    --accent-foreground: 195 85% 41%;
+    --accent: 210 20% 96%;
+    --accent-foreground: 220 30% 15%;
 
-    --destructive: 0 84.2% 60.2%;
+    --destructive: 0 84% 60%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 195 85% 41%;
+    --border: 214 25% 90%;
+    --input: 214 25% 90%;
+    --ring: 210 100% 45%;
 
-    --radius: 0.5rem;
+    --radius: 0.75rem;
 
     --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-foreground: 240 5% 26%;
+    --sidebar-primary: 240 6% 10%;
     --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-accent: 240 5% 96%;
+    --sidebar-accent-foreground: 240 6% 10%;
     --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-ring: 217 91% 60%;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
+    --background: 220 30% 10%;
     --foreground: 210 40% 98%;
 
-    --card: 222.2 84% 4.9%;
+    --card: 220 30% 12%;
     --card-foreground: 210 40% 98%;
 
-    --popover: 222.2 84% 4.9%;
+    --popover: 220 30% 12%;
     --popover-foreground: 210 40% 98%;
 
-    --primary: 195 85% 41%;
+    --primary: 210 100% 50%;
     --primary-foreground: 210 40% 98%;
 
-    --secondary: 217.2 32.6% 17.5%;
+    --secondary: 215 35% 20%;
     --secondary-foreground: 210 40% 98%;
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 215 35% 20%;
+    --muted-foreground: 215 20% 70%;
 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 195 85% 41%;
+    --accent: 215 35% 20%;
+    --accent-foreground: 210 40% 98%;
 
-    --destructive: 0 62.8% 30.6%;
+    --destructive: 0 63% 31%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 195 85% 41%;
+    --border: 215 35% 25%;
+    --input: 215 35% 25%;
+    --ring: 210 100% 65%;
   }
 }
 
@@ -80,17 +81,131 @@
     @apply border-border;
   }
 
+  html {
+    font-size: 18px; /* Increased base font size for elderly users */
+  }
+
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    line-height: 1.6; /* Improved line height for readability */
   }
 
+  /* Improve form element accessibility for elderly users */
+  input, select, textarea {
+    @apply text-xl;
+  }
+
+  /* Custom focus styles with higher visibility */
+  :focus {
+    @apply outline-none ring-2 ring-primary ring-offset-2 ring-offset-background transition-all duration-200;
+  }
+
+  /* Improve button tap targets for elderly users */
+  button, 
+  [role="button"] {
+    @apply cursor-pointer transition-all duration-200 min-h-[56px] min-w-[56px];
+  }
+
+  /* Larger headings for elderly users */
   h1, h2, h3, h4, h5, h6 {
-    @apply tracking-tight;
+    @apply font-bold;
+  }
+
+  h1 { @apply text-4xl; }
+  h2 { @apply text-3xl; }
+  h3 { @apply text-2xl; }
+  h4 { @apply text-xl; }
+
+  /* Improve links visibility */
+  a {
+    @apply text-primary underline font-medium;
+  }
+
+  /* Improve label readability */
+  label {
+    @apply text-xl font-medium;
   }
 }
 
 @layer components {
+  .glass-panel {
+    @apply bg-white bg-opacity-70 backdrop-blur-lg border border-white border-opacity-20 shadow-lg;
+  }
+  
+  .form-container {
+    @apply glass-panel rounded-2xl p-6 animate-fade-up;
+  }
+
+  .focus-within-ring {
+    @apply focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2 focus-within:ring-offset-background;
+  }
+  
+  .heading-lg {
+    @apply text-4xl font-semibold tracking-tight text-foreground;
+  }
+  
+  .heading-md {
+    @apply text-3xl font-semibold tracking-tight text-foreground;
+  }
+  
+  .subheading {
+    @apply text-xl font-medium text-muted-foreground;
+  }
+  
+  .card-highlight {
+    @apply bg-medBlue-light border border-medBlue border-opacity-30 shadow-sm;
+  }
+
+  /* Elderly-friendly button styling */
+  .btn-elderly {
+    @apply h-14 px-6 text-xl font-semibold rounded-lg shadow-md;
+  }
+
+  /* Large text for medical advice */
+  .elderly-advice {
+    @apply text-xl leading-relaxed;
+  }
+
+  /* High contrast card */
+  .card-elderly {
+    @apply border-2 bg-white shadow-lg;
+  }
+
+  /* New medical advice styling */
+  .advice-container {
+    @apply p-4 text-foreground;
+  }
+
+  .advice-heading {
+    @apply text-3xl font-bold text-destructive my-4 leading-tight;
+  }
+
+  .advice-important {
+    @apply font-bold text-destructive text-2xl;
+  }
+
+  .advice-emphasis {
+    @apply font-semibold text-foreground text-xl;
+  }
+
+  .advice-bullet {
+    @apply flex items-start my-4 text-xl leading-relaxed pl-2;
+  }
+
+  .advice-bullet-dot {
+    @apply text-2xl text-medBlue mr-3 font-bold;
+  }
+
+  .advice-content {
+    @apply space-y-4 p-4 rounded-lg bg-white shadow-inner text-xl leading-relaxed;
+  }
+
+  /* Keep existing glass-card classes */
   .glass-card {
     @apply bg-white bg-opacity-80 backdrop-blur-md rounded-xl border border-white border-opacity-20 shadow-glass transition-all duration-300;
   }
@@ -99,6 +214,7 @@
     @apply shadow-glass-hover;
   }
 
+  /* Keep existing page-transition classes */
   .page-transition-enter {
     @apply opacity-0;
   }
@@ -115,6 +231,7 @@
     @apply opacity-0 transition-opacity duration-300;
   }
 
+  /* Keep existing button classes */
   .btn-primary {
     @apply bg-primary text-primary-foreground hover:bg-primary/90 rounded-full px-6 py-2.5 font-medium transition-all duration-300 shadow-button hover:shadow-md;
   }
@@ -132,6 +249,64 @@
   }
 }
 
+/* Add smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Override autofill styles */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-text-fill-color: theme('colors.foreground');
+  -webkit-box-shadow: 0 0 0px 1000px theme('colors.background') inset;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
+/* Enhanced Medical Advice Styling */
+.advice-container {
+  position: relative;
+  overflow: hidden;
+}
+
+.advice-container:before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 5px;
+  height: 100%;
+  background: theme('colors.primary');
+  border-radius: 4px;
+}
+
+.advice-heading {
+  position: relative;
+  margin-top: 0.5rem;
+  padding: 0.75rem 1rem;
+  background-color: rgba(220, 38, 38, 0.1);
+  border-radius: 0.5rem;
+  letter-spacing: 0.01em;
+}
+
+.advice-important {
+  background-color: rgba(220, 38, 38, 0.15);
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  display: inline-block;
+  line-height: 1.4;
+  margin: 0.25rem 0;
+}
+
+.advice-bullet {
+  padding: 0.5rem 1rem;
+  margin: 0.75rem 0;
+  background-color: rgba(0, 115, 230, 0.05);
+  border-radius: 0.5rem;
+  border-left: 4px solid theme('colors.primary');
+}
+
+/* Original animations */
 @keyframes highlight {
   0% {
     background-color: rgba(59, 130, 246, 0.2);
@@ -170,4 +345,20 @@
 
 .notification-badge {
   animation: pulse 2s infinite;
+}
+
+/* Add new animations */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.5s ease-out forwards;
 }
