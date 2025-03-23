@@ -15,7 +15,7 @@ interface Doctor {
     id: string;
     first_name: string;
     last_name: string;
-  };
+  } | null;
   specialty: string;
   years_experience: number | null;
   location: string | null;
@@ -63,15 +63,16 @@ const DoctorsList = () => {
         throw error;
       }
       
-      // Transform the data to match our Doctor interface
-      const formattedDoctors = data?.map(doctor => ({
-        id: doctor.id,
-        profiles: doctor.profiles,
-        specialty: doctor.specialty,
-        years_experience: doctor.years_experience,
-        location: doctor.location,
-        bio: doctor.bio
-      })) || [];
+      // Transform the data to match our Doctor interface and filter out those with null profiles
+      const formattedDoctors = data?.filter(doctor => doctor.profiles !== null)
+        .map(doctor => ({
+          id: doctor.id,
+          profiles: doctor.profiles,
+          specialty: doctor.specialty,
+          years_experience: doctor.years_experience,
+          location: doctor.location,
+          bio: doctor.bio
+        })) || [];
       
       setDoctors(formattedDoctors);
 
@@ -141,7 +142,11 @@ const DoctorsList = () => {
                   <div className="flex justify-between">
                     <div>
                       <h3 className="text-xl font-semibold">
-                        Dr. {doctor.profiles.first_name} {doctor.profiles.last_name}
+                        {doctor.profiles ? (
+                          `Dr. ${doctor.profiles.first_name} ${doctor.profiles.last_name}`
+                        ) : (
+                          "Doctor"
+                        )}
                       </h3>
                       <p className="text-lg text-muted-foreground">{doctor.specialty}</p>
                     </div>
