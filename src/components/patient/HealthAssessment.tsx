@@ -81,7 +81,7 @@ const HealthAssessment = ({
         </div>
         
         {fromFallback && (
-          <Alert variant="warning" className="mb-6 bg-amber-50 border-amber-300">
+          <Alert variant="destructive" className="mb-6 bg-amber-50 border-amber-300">
             <AlertTriangle className="h-6 w-6 text-amber-600" />
             <AlertDescription className="text-lg ml-2 text-amber-800">
               This is a general assessment. Our AI service is currently experiencing issues. For the most accurate advice, please consult a healthcare professional.
