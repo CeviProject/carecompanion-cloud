@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -9,10 +8,10 @@ import HealthQueryForm from '@/components/patient/HealthQueryForm';
 import HealthAssessment from '@/components/patient/HealthAssessment';
 import DoctorRecommendations from '@/components/patient/DoctorRecommendations';
 import AppointmentBooking from '@/components/patient/AppointmentBooking';
-import HealthTips from '@/components/patient/HealthTips';
 import MedicationReminders from '@/components/patient/MedicationReminders';
+import ElderlyHealthTips from '@/components/patient/ElderlyHealthTips';
 import { supabase } from '@/integrations/supabase/client';
-import { Bell, Calendar, Pill, AlertTriangle } from 'lucide-react';
+import { Bell, Calendar, Pill, AlertTriangle, Heart } from 'lucide-react';
 import { toast } from 'sonner';
 import { Json } from '@/integrations/supabase/types';
 
@@ -249,7 +248,7 @@ const PatientDashboard = () => {
       </div>
 
       <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4">
-        <TabsList className="grid grid-cols-3 lg:grid-cols-7 w-full">
+        <TabsList className="grid grid-cols-3 lg:grid-cols-8 w-full">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="appointments" className="relative">
             Appointments
@@ -269,14 +268,8 @@ const PatientDashboard = () => {
           </TabsTrigger>
           <TabsTrigger value="health-query">Health Query</TabsTrigger>
           <TabsTrigger value="assessment">Assessment</TabsTrigger>
-          <TabsTrigger value="health-tips" className="relative">
-            Health Tips
-            {notifications.healthTips > 0 && (
-              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                {notifications.healthTips}
-              </span>
-            )}
-          </TabsTrigger>
+          <TabsTrigger value="health-tips">Health Tips</TabsTrigger>
+          <TabsTrigger value="elderly-tips">Elderly Tips</TabsTrigger>
           <TabsTrigger value="doctors">Find Doctors</TabsTrigger>
         </TabsList>
 
@@ -408,7 +401,19 @@ const PatientDashboard = () => {
         <TabsContent value="health-tips">
           <Card>
             <CardContent className="pt-6">
-              <HealthTips />
+              <div className="flex items-center justify-center p-10">
+                <p className="text-muted-foreground text-center">
+                  The Health Tips functionality has been removed.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="elderly-tips">
+          <Card>
+            <CardContent className="pt-6">
+              <ElderlyHealthTips />
             </CardContent>
           </Card>
         </TabsContent>
