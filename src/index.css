@@ -276,7 +276,7 @@ input:-webkit-autofill:focus {
   left: 0;
   width: 5px;
   height: 100%;
-  background: theme('colors.primary');
+  background: theme('colors.primary.DEFAULT');
   border-radius: 4px;
 }
 
@@ -303,7 +303,7 @@ input:-webkit-autofill:focus {
   margin: 0.75rem 0;
   background-color: rgba(0, 115, 230, 0.05);
   border-radius: 0.5rem;
-  border-left: 4px solid theme('colors.primary');
+  border-left: 4px solid theme('colors.primary.DEFAULT');
 }
 
 /* Original animations */
