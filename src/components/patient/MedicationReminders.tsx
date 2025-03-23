@@ -415,11 +415,24 @@ const MedicationReminders = () => {
     });
   };
 
+  const handleRefreshMedications = () => {
+    toast.info("Refreshing medications...");
+    fetchMedications();
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold">Medication Reminders</h2>
         <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={handleRefreshMedications}
+            className="mr-2"
+          >
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Refresh List
+          </Button>
           <Button 
             variant="outline" 
             onClick={syncWithGoogleCalendar} 
