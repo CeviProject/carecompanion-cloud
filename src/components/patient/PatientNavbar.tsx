@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
@@ -10,8 +11,7 @@ import {
   UserRound,
   Menu,
   X,
-  LogOut,
-  Heart
+  LogOut
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -105,7 +105,6 @@ const PatientNavbar = () => {
     { label: 'Medications', path: '/patient/medications', icon: Pill, count: notifications.medications },
     { label: 'Health Query', path: '/patient/health-query', icon: Search },
     { label: 'Assessment', path: '/patient/assessment', icon: ActivitySquare },
-    { label: 'Elderly Tips', path: '/patient/elderly-tips', icon: Heart },
     { label: 'Find Doctors', path: '/patient/doctors', icon: UserRound },
   ];
 
