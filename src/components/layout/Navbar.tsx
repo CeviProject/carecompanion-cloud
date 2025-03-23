@@ -56,7 +56,7 @@ const Navbar = () => {
           <div className="flex items-center">
             <Link to="/" className="flex items-center gap-2">
               <span className="text-primary text-2xl font-semibold animate-pulse-gentle">
-                VirtualHealth
+                Med-Guardian
               </span>
             </Link>
           </div>
@@ -66,8 +66,10 @@ const Navbar = () => {
             <Link 
               to="/" 
               className={cn(
-                "text-sm font-medium transition-colors hover:text-primary",
-                isActive("/") ? "text-primary" : "text-foreground/80"
+                "text-sm font-medium transition-colors px-4 py-2 rounded-full",
+                isActive("/") 
+                  ? "bg-medBlue text-white" 
+                  : "bg-medBlue-light text-foreground/80 hover:bg-medBlue hover:text-white"
               )}
             >
               Home
@@ -76,8 +78,10 @@ const Navbar = () => {
               <Link 
                 to="/patient/overview" 
                 className={cn(
-                  "text-sm font-medium transition-colors hover:text-primary",
-                  isActive("/patient/overview") ? "text-primary" : "text-foreground/80"
+                  "text-sm font-medium transition-colors px-4 py-2 rounded-full",
+                  isActive("/patient/overview") 
+                    ? "bg-primary text-white" 
+                    : "bg-primary/10 text-foreground/80 hover:bg-primary hover:text-white"
                 )}
               >
                 Dashboard
@@ -87,8 +91,10 @@ const Navbar = () => {
               <Link 
                 to="/dashboard/doctor" 
                 className={cn(
-                  "text-sm font-medium transition-colors hover:text-primary",
-                  isActive("/dashboard/doctor") ? "text-primary" : "text-foreground/80"
+                  "text-sm font-medium transition-colors px-4 py-2 rounded-full",
+                  isActive("/dashboard/doctor") 
+                    ? "bg-primary text-white" 
+                    : "bg-primary/10 text-foreground/80 hover:bg-primary hover:text-white"
                 )}
               >
                 Dashboard
@@ -97,8 +103,10 @@ const Navbar = () => {
             <Link 
               to="/about" 
               className={cn(
-                "text-sm font-medium transition-colors hover:text-primary",
-                isActive("/about") ? "text-primary" : "text-foreground/80"
+                "text-sm font-medium transition-colors px-4 py-2 rounded-full",
+                isActive("/about") 
+                  ? "bg-health-500 text-white" 
+                  : "bg-health-100 text-foreground/80 hover:bg-health-500 hover:text-white"
               )}
             >
               About
@@ -106,8 +114,10 @@ const Navbar = () => {
             <Link 
               to="/features" 
               className={cn(
-                "text-sm font-medium transition-colors hover:text-primary",
-                isActive("/features") ? "text-primary" : "text-foreground/80"
+                "text-sm font-medium transition-colors px-4 py-2 rounded-full",
+                isActive("/features") 
+                  ? "bg-destructive text-white" 
+                  : "bg-destructive/10 text-foreground/80 hover:bg-destructive hover:text-white"
               )}
             >
               Features
@@ -160,8 +170,10 @@ const Navbar = () => {
             <button
               onClick={() => handleNavigation("/")}
               className={cn(
-                "block w-full text-left px-3 py-2 rounded-md text-base font-medium focus-ring",
-                isActive("/") ? "text-primary" : "text-foreground/80 hover:text-primary"
+                "block w-full text-left px-4 py-2 rounded-full text-base font-medium focus-ring",
+                isActive("/") 
+                  ? "bg-medBlue text-white" 
+                  : "bg-medBlue-light text-foreground/80 hover:bg-medBlue hover:text-white"
               )}
             >
               Home
@@ -170,8 +182,10 @@ const Navbar = () => {
               <button 
                 onClick={() => handleNavigation("/patient/overview")}
                 className={cn(
-                  "block w-full text-left px-3 py-2 rounded-md text-base font-medium focus-ring",
-                  isActive("/patient/overview") ? "text-primary" : "text-foreground/80 hover:text-primary"
+                  "block w-full text-left px-4 py-2 rounded-full text-base font-medium focus-ring",
+                  isActive("/patient/overview") 
+                    ? "bg-primary text-white" 
+                    : "bg-primary/10 text-foreground/80 hover:bg-primary hover:text-white"
                 )}
               >
                 Dashboard
@@ -181,8 +195,10 @@ const Navbar = () => {
               <button
                 onClick={() => handleNavigation("/dashboard/doctor")}
                 className={cn(
-                  "block w-full text-left px-3 py-2 rounded-md text-base font-medium focus-ring",
-                  isActive("/dashboard/doctor") ? "text-primary" : "text-foreground/80 hover:text-primary"
+                  "block w-full text-left px-4 py-2 rounded-full text-base font-medium focus-ring",
+                  isActive("/dashboard/doctor") 
+                    ? "bg-primary text-white" 
+                    : "bg-primary/10 text-foreground/80 hover:bg-primary hover:text-white"
                 )}
               >
                 Dashboard
@@ -191,8 +207,10 @@ const Navbar = () => {
             <button
               onClick={() => handleNavigation("/about")}
               className={cn(
-                "block w-full text-left px-3 py-2 rounded-md text-base font-medium focus-ring",
-                isActive("/about") ? "text-primary" : "text-foreground/80 hover:text-primary"
+                "block w-full text-left px-4 py-2 rounded-full text-base font-medium focus-ring",
+                isActive("/about") 
+                  ? "bg-health-500 text-white" 
+                  : "bg-health-100 text-foreground/80 hover:bg-health-500 hover:text-white"
               )}
             >
               About
@@ -200,8 +218,10 @@ const Navbar = () => {
             <button
               onClick={() => handleNavigation("/features")}
               className={cn(
-                "block w-full text-left px-3 py-2 rounded-md text-base font-medium focus-ring",
-                isActive("/features") ? "text-primary" : "text-foreground/80 hover:text-primary"
+                "block w-full text-left px-4 py-2 rounded-full text-base font-medium focus-ring",
+                isActive("/features") 
+                  ? "bg-destructive text-white" 
+                  : "bg-destructive/10 text-foreground/80 hover:bg-destructive hover:text-white"
               )}
             >
               Features

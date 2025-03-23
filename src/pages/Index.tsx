@@ -62,14 +62,16 @@ const Index = () => {
                 Connect with licensed doctors online, get prescriptions, and access personalized healthcare from the comfort of your home.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Button
-                  onClick={handleGetStarted}
-                  size="lg"
-                  className="rounded-full px-8 text-lg group"
-                >
-                  Get Started
-                  <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
-                </Button>
+                {!isAuthenticated && (
+                  <Button
+                    onClick={handleGetStarted}
+                    size="lg"
+                    className="rounded-full px-8 text-lg group"
+                  >
+                    Get Started
+                    <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
+                  </Button>
+                )}
                 <Button
                   variant="outline"
                   size="lg"
@@ -78,14 +80,16 @@ const Index = () => {
                 >
                   <Link to="/features">Learn More</Link>
                 </Button>
-                <Button
-                  variant="secondary"
-                  size="lg"
-                  className="rounded-full px-8 text-lg font-semibold bg-gradient-to-r from-green-100 to-green-200 hover:from-green-200 hover:to-green-300 text-green-800"
-                  onClick={() => window.location.href = "https://eldercare-bot-assistant.lovable.app/"}
-                >
-                  Try For Free
-                </Button>
+                {!isAuthenticated && (
+                  <Button
+                    variant="secondary"
+                    size="lg"
+                    className="rounded-full px-8 text-lg font-semibold bg-gradient-to-r from-green-100 to-green-200 hover:from-green-200 hover:to-green-300 text-green-800"
+                    onClick={() => window.location.href = "https://eldercare-bot-assistant.lovable.app/"}
+                  >
+                    Try For Free
+                  </Button>
+                )}
               </div>
             </div>
           </div>
@@ -94,7 +98,7 @@ const Index = () => {
         <section className="py-20 px-4 bg-muted/50">
           <div className="container mx-auto">
             <h2 className="text-3xl md:text-4xl font-bold text-center mb-12">
-              Why Choose VirtualHealth?
+              Why Choose Med-Guardian?
             </h2>
             
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -123,13 +127,15 @@ const Index = () => {
               <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
                 Join thousands of patients who have already made the switch to virtual healthcare.
               </p>
-              <Button
-                onClick={handleGetStarted}
-                size="lg"
-                className="rounded-full px-8 text-lg"
-              >
-                Get Started Today
-              </Button>
+              {!isAuthenticated && (
+                <Button
+                  onClick={handleGetStarted}
+                  size="lg"
+                  className="rounded-full px-8 text-lg"
+                >
+                  Get Started Today
+                </Button>
+              )}
             </div>
           </div>
         </section>
