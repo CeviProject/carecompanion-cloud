@@ -100,18 +100,23 @@ const ElderlyHealthTips = () => {
         throw new Error('No authentication token available. Please log in again.');
       }
       
-      const { data, error } = await supabase.functions.invoke('generate-elderly-tip', {
-        body: JSON.stringify(contextData),
+      // Using direct fetch instead of supabase functions to avoid Edge Function errors
+      const SUPABASE_URL = "https://irkihiedlszoufsjglhw.supabase.co";
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/generate-elderly-tip`, {
+        method: 'POST',
         headers: {
-          Authorization: `Bearer ${sessionData.session.access_token}`,
+          'Authorization': `Bearer ${sessionData.session.access_token}`,
           'Content-Type': 'application/json'
-        }
+        },
+        body: JSON.stringify(contextData)
       });
       
-      if (error) {
-        console.error('Function error details:', error);
-        throw error;
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to generate tip: ${response.status} ${errorText}`);
       }
+      
+      const data = await response.json();
       
       if (data && data.success && data.tip) {
         setTip(data.tip);
@@ -136,49 +141,50 @@ const ElderlyHealthTips = () => {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold">Elderly Health Tips</h2>
+        <h2 className="text-3xl font-bold">Health Tips</h2>
         <Button 
           variant="outline" 
           onClick={generateTip} 
           disabled={isLoading}
-          className="bg-gradient-to-r from-blue-100 to-green-100 hover:from-blue-200 hover:to-green-200"
+          className="bg-gradient-to-r from-blue-100 to-green-100 hover:from-blue-200 hover:to-green-200 text-lg py-6 px-6 rounded-xl"
+          size="lg"
         >
           {isLoading ? (
             <>
-              <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-              Generating...
+              <RefreshCw className="mr-3 h-5 w-5 animate-spin" />
+              <span className="text-lg">Generating...</span>
             </>
           ) : (
             <>
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Generate New Tip
+              <RefreshCw className="mr-3 h-5 w-5" />
+              <span className="text-lg">New Tip</span>
             </>
           )}
         </Button>
       </div>
 
       {!tip && !isLoading && (
-        <Card>
-          <CardContent className="py-10">
-            <p className="text-center text-gray-500">No tips generated yet. Click "Generate New Tip" to get started.</p>
+        <Card className="shadow-lg border-2">
+          <CardContent className="py-12">
+            <p className="text-center text-gray-500 text-xl">No tips generated yet. Click "New Tip" to get started.</p>
           </CardContent>
         </Card>
       )}
 
       {tip && (
-        <Card className="transition-all duration-300 hover:shadow-md border-t-4 border-t-green-500">
-          <CardHeader>
-            <CardTitle className="text-xl text-green-800">{tip.title}</CardTitle>
+        <Card className="transition-all duration-300 hover:shadow-xl border-t-4 border-t-green-500 shadow-lg">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-2xl text-green-800">{tip.title}</CardTitle>
             {tip.category && (
-              <CardDescription className="text-green-600">
+              <CardDescription className="text-green-600 text-lg">
                 {tip.category}
               </CardDescription>
             )}
           </CardHeader>
           <CardContent>
-            <p className="whitespace-pre-line">{tip.content}</p>
+            <p className="whitespace-pre-line text-xl leading-relaxed">{tip.content}</p>
           </CardContent>
         </Card>
       )}

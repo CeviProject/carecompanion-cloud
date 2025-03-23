@@ -37,15 +37,15 @@ const PatientHealthQuery = () => {
     <div className="min-h-screen bg-background">
       <PatientNavbar />
       <div className="container mx-auto py-6 max-w-7xl pt-20">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold tracking-tight">Health Query</h1>
-          <p className="text-muted-foreground">
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold tracking-tight">Health Query</h1>
+          <p className="text-muted-foreground text-xl mt-2">
             Submit your health concerns and symptoms for assessment.
           </p>
         </div>
         
-        <Card>
-          <CardContent className="pt-6">
+        <Card className="shadow-lg border-2">
+          <CardContent className="pt-8 px-6 md:px-8">
             <HealthQueryForm onQuerySubmitted={handleQuerySubmitted} />
           </CardContent>
         </Card>
