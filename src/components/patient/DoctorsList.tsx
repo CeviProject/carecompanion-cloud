@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { User, Clock, MapPin, Bookmark, Filter } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { toast } from 'sonner';
 
 interface Doctor {
   id: string;
@@ -39,8 +40,12 @@ const DoctorsList = () => {
       let query = supabase
         .from('doctor_profiles')
         .select(`
-          *,
-          profiles!inner(
+          id,
+          specialty,
+          years_experience,
+          location,
+          bio,
+          profiles (
             id,
             first_name,
             last_name
@@ -53,9 +58,22 @@ const DoctorsList = () => {
       
       const { data, error } = await query;
       
-      if (error) throw error;
+      if (error) {
+        toast.error(`Error fetching doctors: ${error.message}`);
+        throw error;
+      }
       
-      setDoctors(data || []);
+      // Transform the data to match our Doctor interface
+      const formattedDoctors = data?.map(doctor => ({
+        id: doctor.id,
+        profiles: doctor.profiles,
+        specialty: doctor.specialty,
+        years_experience: doctor.years_experience,
+        location: doctor.location,
+        bio: doctor.bio
+      })) || [];
+      
+      setDoctors(formattedDoctors);
 
       // Get unique specialties for the filter
       if (specialty === 'all') {

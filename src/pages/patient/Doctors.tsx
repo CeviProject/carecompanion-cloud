@@ -8,16 +8,19 @@ import PatientNavbar from '@/components/patient/PatientNavbar';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Json } from '@/integrations/supabase/types';
+import { toast } from 'sonner';
 
 const PatientDoctors = () => {
   const { user } = useAuth();
   const [suggestedSpecialties, setSuggestedSpecialties] = useState<string[] | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!user) return;
 
     const fetchLatestHealthQuery = async () => {
       try {
+        setLoading(true);
         const { data: healthQuery, error: healthQueryError } = await supabase
           .from('health_queries')
           .select('*')
@@ -26,7 +29,13 @@ const PatientDoctors = () => {
           .limit(1)
           .single();
 
-        if (!healthQueryError && healthQuery) {
+        if (healthQueryError) {
+          if (healthQueryError.code !== 'PGRST116') { // PGRST116 is the "no rows returned" error
+            toast.error(`Error fetching health query: ${healthQueryError.message}`);
+          }
+          // It's okay if there are no health queries yet
+          setSuggestedSpecialties(null);
+        } else if (healthQuery) {
           // Extract suggestedSpecialties from patient_data if available
           const patientData = healthQuery.patient_data as Json;
           
@@ -37,6 +46,9 @@ const PatientDoctors = () => {
         }
       } catch (error) {
         console.error('Error fetching health query:', error);
+        toast.error('There was a problem loading your health recommendations.');
+      } finally {
+        setLoading(false);
       }
     };
 
