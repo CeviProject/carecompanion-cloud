@@ -1,3 +1,4 @@
+
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -76,6 +77,14 @@ const Index = () => {
                   asChild
                 >
                   <Link to="/features">Learn More</Link>
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="lg"
+                  className="rounded-full px-8 text-lg font-semibold bg-gradient-to-r from-green-100 to-green-200 hover:from-green-200 hover:to-green-300 text-green-800"
+                  onClick={() => window.location.href = "https://eldercare-bot-assistant.lovable.app/"}
+                >
+                  Try For Free
                 </Button>
               </div>
             </div>
