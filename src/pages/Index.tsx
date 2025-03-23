@@ -82,9 +82,9 @@ const Index = () => {
                   variant="secondary"
                   size="lg"
                   className="rounded-full px-8 text-lg font-semibold bg-gradient-to-r from-green-100 to-green-200 hover:from-green-200 hover:to-green-300 text-green-800"
-                  asChild
+                  onClick={() => window.location.href = "https://eldercare-bot-assistant.lovable.app/"}
                 >
-                  <Link to="">Try For Free</Link>
+                  Try For Free
                 </Button>
               </div>
             </div>
