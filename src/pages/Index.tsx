@@ -23,12 +23,12 @@ const Index = () => {
 
     if (isAuthenticated && profile) {
       console.log('User is authenticated with profile, redirecting to dashboard');
-      navigate(`/dashboard/${profile.role || 'patient'}`);
+      navigateToDashboard();
     } else if (isAuthenticated) {
       console.log('User is authenticated but no profile, waiting for profile data');
       setTimeout(() => {
         if (profile) {
-          navigate(`/dashboard/${profile.role || 'patient'}`);
+          navigateToDashboard();
         } else {
           console.log('No profile after waiting, redirecting to registration');
           navigate('/auth/register');
@@ -40,20 +40,21 @@ const Index = () => {
     }
   };
 
-  const handleDashboardNavigation = () => {
-    if (isAuthenticated && profile) {
-      if (profile.role === 'patient') {
-        navigate('/patient/overview');
-      } else if (profile.role === 'doctor') {
-        navigate('/dashboard/doctor');
-      }
+  const navigateToDashboard = () => {
+    const role = profile?.role || 'patient';
+    if (role === 'patient') {
+      navigate('/patient/overview');
+    } else if (role === 'doctor') {
+      navigate('/dashboard/doctor');
+    } else {
+      navigate(`/dashboard/${role}`);
     }
   };
 
   useEffect(() => {
     if (!loading && isAuthenticated && profile) {
       console.log('Auto-redirecting authenticated user to dashboard');
-      navigate(`/dashboard/${profile.role || 'patient'}`);
+      navigateToDashboard();
     }
   }, [isAuthenticated, profile, loading, navigate]);
 
@@ -61,7 +62,7 @@ const Index = () => {
     <div className="min-h-screen flex flex-col">
       <Navbar />
       
-      <main className="flex-grow">
+      <main className="flex-grow pt-20"> {/* Added padding-top to account for fixed navbar */}
         <section className="py-20 md:py-28 px-4">
           <div className="container mx-auto">
             <div className="max-w-3xl mx-auto text-center">
@@ -83,7 +84,7 @@ const Index = () => {
                   </Button>
                 ) : (
                   <Button
-                    onClick={handleDashboardNavigation}
+                    onClick={navigateToDashboard}
                     size="lg"
                     className="rounded-full px-8 text-lg group bg-primary text-primary-foreground"
                   >
@@ -156,7 +157,7 @@ const Index = () => {
                 </Button>
               ) : (
                 <Button
-                  onClick={handleDashboardNavigation}
+                  onClick={navigateToDashboard}
                   size="lg"
                   className="rounded-full px-8 text-lg"
                 >
