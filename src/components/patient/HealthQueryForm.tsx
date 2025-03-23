@@ -3,14 +3,14 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Form, FormField, FormItem, FormLabel, FormControl } from '@/components/ui/form';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
-import { Loader2, AlertCircle } from 'lucide-react';
+import { Loader2, AlertCircle, HelpCircle } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface HealthQueryFormProps {
   onQuerySubmitted?: (queryData: any) => void;
@@ -138,7 +138,8 @@ const HealthQueryForm = ({ onQuerySubmitted }: HealthQueryFormProps) => {
         onQuerySubmitted({
           ...queryData,
           suggestedSpecialties: aiData.suggestedSpecialties,
-          recommendedHospitals: aiData.recommendedHospitals
+          recommendedHospitals: aiData.recommendedHospitals,
+          fromFallback: aiData.fromFallback
         });
       }
     } catch (error: any) {
@@ -156,24 +157,36 @@ const HealthQueryForm = ({ onQuerySubmitted }: HealthQueryFormProps) => {
       
       {error && (
         <Alert variant="destructive" className="mb-6 text-lg">
-          <AlertCircle className="h-5 w-5" />
-          <AlertDescription className="text-lg">{error}</AlertDescription>
+          <AlertCircle className="h-6 w-6" />
+          <AlertDescription className="text-lg ml-2">{error}</AlertDescription>
         </Alert>
       )}
       
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
+        <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-8">
           <FormField
             control={form.control}
             name="queryText"
             render={({ field }) => (
-              <FormItem className="space-y-3">
-                <FormLabel className="text-xl">What symptoms are you experiencing?</FormLabel>
+              <FormItem className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <FormLabel className="text-2xl font-medium">What symptoms are you experiencing?</FormLabel>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <HelpCircle className="h-6 w-6 text-primary cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent className="text-lg p-4 max-w-md">
+                        Please describe any symptoms, pain, or health concerns you're having in as much detail as possible.
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
                 <FormControl>
                   <Textarea
                     placeholder="Describe your symptoms, concerns, or health questions in detail..."
-                    rows={5}
-                    className="resize-none text-lg p-4"
+                    rows={6}
+                    className="resize-none text-xl p-6 rounded-xl"
                     required
                     disabled={isLoading}
                     {...field}
@@ -183,19 +196,19 @@ const HealthQueryForm = ({ onQuerySubmitted }: HealthQueryFormProps) => {
             )}
           />
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <FormField
               control={form.control}
               name="age"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-xl">Age</FormLabel>
+                  <FormLabel className="text-2xl font-medium">Age</FormLabel>
                   <FormControl>
                     <Input 
                       type="number" 
                       placeholder="Enter your age" 
                       disabled={isLoading}
-                      className="text-lg p-4 h-14"
+                      className="text-xl p-6 h-16 rounded-xl"
                       {...field}
                     />
                   </FormControl>
@@ -208,10 +221,10 @@ const HealthQueryForm = ({ onQuerySubmitted }: HealthQueryFormProps) => {
               name="gender"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-xl">Gender</FormLabel>
+                  <FormLabel className="text-2xl font-medium">Gender</FormLabel>
                   <FormControl>
                     <select 
-                      className="flex h-14 w-full rounded-md border border-input bg-background px-4 py-2 text-lg ring-offset-background file:border-0 file:bg-transparent file:text-lg file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="flex h-16 w-full rounded-xl border border-input bg-background px-6 py-2 text-xl ring-offset-background file:border-0 file:bg-transparent file:text-xl file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                       disabled={isLoading}
                       {...field}
                     >
@@ -231,12 +244,12 @@ const HealthQueryForm = ({ onQuerySubmitted }: HealthQueryFormProps) => {
             name="location"
             render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-xl">Location (City, Country)</FormLabel>
+                <FormLabel className="text-2xl font-medium">Location (City, Country)</FormLabel>
                 <FormControl>
                   <Input 
                     placeholder="e.g., New York, USA" 
                     disabled={isLoading}
-                    className="text-lg p-4 h-14"
+                    className="text-xl p-6 h-16 rounded-xl"
                     {...field} 
                   />
                 </FormControl>
@@ -249,12 +262,24 @@ const HealthQueryForm = ({ onQuerySubmitted }: HealthQueryFormProps) => {
             name="medicalHistory"
             render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-xl">Relevant Medical History (Optional)</FormLabel>
+                <div className="flex items-center gap-2">
+                  <FormLabel className="text-2xl font-medium">Relevant Medical History (Optional)</FormLabel>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <HelpCircle className="h-6 w-6 text-primary cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent className="text-lg p-4 max-w-md">
+                        Include any chronic conditions, allergies, medications, or past surgeries that may be relevant.
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
                 <FormControl>
                   <Textarea
                     placeholder="Any relevant medical conditions, allergies, or medications..."
-                    rows={3}
-                    className="resize-none text-lg p-4"
+                    rows={4}
+                    className="resize-none text-xl p-6 rounded-xl"
                     disabled={isLoading}
                     {...field}
                   />
@@ -265,21 +290,21 @@ const HealthQueryForm = ({ onQuerySubmitted }: HealthQueryFormProps) => {
           
           <Button 
             type="submit" 
-            className="w-full rounded-xl text-xl py-6 mt-4" 
+            className="w-full rounded-xl text-2xl py-8 mt-6 font-medium" 
             size="lg"
             disabled={isLoading}
           >
             {isLoading ? (
               <>
-                <Loader2 className="mr-3 h-6 w-6 animate-spin" />
-                Analyzing with Gemini AI...
+                <Loader2 className="mr-4 h-8 w-8 animate-spin" />
+                Analyzing with AI...
               </>
             ) : (
               'Get AI Assessment'
             )}
           </Button>
           
-          <p className="text-md text-muted-foreground text-center mt-4">
+          <p className="text-xl text-muted-foreground text-center mt-6 font-medium bg-amber-50 p-4 rounded-lg border border-amber-200">
             This AI assessment is not a substitute for professional medical advice.
             Always consult with a healthcare provider for medical concerns.
           </p>

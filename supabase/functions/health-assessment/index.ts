@@ -1,3 +1,4 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
@@ -122,7 +123,20 @@ Format your response in a helpful, clear manner that is informative but not alar
       if (!response.ok) {
         const errorText = await response.text();
         console.error('Gemini API error details:', errorText);
-        throw new Error(`Gemini API error: ${response.status} ${response.statusText} - ${errorText}`);
+        
+        // Create a fallback assessment when API fails
+        const fallbackAssessment = generateFallbackAssessment(healthQuery, patientData);
+        
+        return new Response(JSON.stringify({ 
+          assessment: fallbackAssessment,
+          suggestedSpecialties: ["General Practice", "Family Medicine"],
+          recommendedHospitals: [
+            { name: "Please consult with a local healthcare provider", address: "For location-specific recommendations", specialty: "General" }
+          ],
+          fromFallback: true
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
       }
 
       const data = await response.json();
@@ -130,7 +144,20 @@ Format your response in a helpful, clear manner that is informative but not alar
       
       if (!data.candidates || data.candidates.length === 0 || !data.candidates[0].content) {
         console.error('Invalid response structure from Gemini API:', JSON.stringify(data));
-        throw new Error('No content returned from Gemini API');
+        
+        // Use fallback if response structure is invalid
+        const fallbackAssessment = generateFallbackAssessment(healthQuery, patientData);
+        
+        return new Response(JSON.stringify({ 
+          assessment: fallbackAssessment,
+          suggestedSpecialties: ["General Practice", "Family Medicine"],
+          recommendedHospitals: [
+            { name: "Please consult with a local healthcare provider", address: "For location-specific recommendations", specialty: "General" }
+          ],
+          fromFallback: true
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
       }
       
       // Extract text content from the response
@@ -151,7 +178,20 @@ Format your response in a helpful, clear manner that is informative but not alar
       });
     } catch (error) {
       console.error('Error during Gemini API request:', error);
-      throw error;
+      
+      // Use fallback on API error
+      const fallbackAssessment = generateFallbackAssessment(healthQuery, patientData);
+      
+      return new Response(JSON.stringify({ 
+        assessment: fallbackAssessment,
+        suggestedSpecialties: ["General Practice", "Family Medicine"],
+        recommendedHospitals: [
+          { name: "Please consult with a local healthcare provider", address: "For location-specific recommendations", specialty: "General" }
+        ],
+        fromFallback: true
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
   } catch (error) {
     console.error('Error in health-assessment function:', error);
@@ -164,6 +204,79 @@ Format your response in a helpful, clear manner that is informative but not alar
     });
   }
 });
+
+// Generate a basic assessment when the API is unavailable
+function generateFallbackAssessment(query: string, patientData: any): string {
+  const symptoms = query.toLowerCase();
+  let baseAssessment = `
+1. Possible conditions based on your symptoms:
+   * Without a detailed medical evaluation, it's difficult to provide specific diagnoses
+   * A healthcare professional should evaluate these symptoms in person
+   * Multiple conditions could present with similar symptoms
+
+2. General recommendations:
+   * Rest and monitor your symptoms
+   * Stay hydrated and maintain a balanced diet
+   * Over-the-counter pain relievers may help with discomfort (follow package directions)
+   * Avoid self-medication beyond basic pain relief
+
+3. Medical specialists to consider:
+   * Primary Care Physician / General Practitioner - for initial evaluation
+   * Family Medicine - for comprehensive care
+
+4. Warning signs that require immediate medical attention:
+   * Severe, persistent pain
+   * Difficulty breathing
+   * Changes in consciousness or mental state
+   * High fever that doesn't respond to medication
+   * Unusual or severe bleeding
+
+5. Seeking medical care:
+   * Contact your primary care provider for an appointment
+   * Visit an urgent care center if you need attention soon but it's not an emergency
+   * Go to an emergency room or call emergency services for severe symptoms
+`;
+
+  // Add some basic symptom-specific advice if we can detect common conditions
+  if (symptoms.includes("headache") || symptoms.includes("head pain") || symptoms.includes("migraine")) {
+    baseAssessment += `
+For headache symptoms specifically:
+* Rest in a quiet, dark room
+* Apply a cool compress to your forehead
+* Practice stress reduction techniques
+* Maintain regular sleep patterns
+* Consider headache triggers like certain foods or stress`;
+  }
+  
+  if (symptoms.includes("stomach") || symptoms.includes("nausea") || symptoms.includes("vomit") || 
+      symptoms.includes("diarrhea") || symptoms.includes("digestive")) {
+    baseAssessment += `
+For digestive symptoms specifically:
+* Follow a bland diet (toast, rice, bananas)
+* Avoid spicy, fatty, or dairy foods temporarily
+* Stay hydrated with clear fluids
+* Eat smaller, more frequent meals
+* Allow your stomach to rest if experiencing nausea`;
+  }
+  
+  if (symptoms.includes("cough") || symptoms.includes("cold") || symptoms.includes("flu") || 
+      symptoms.includes("fever") || symptoms.includes("throat")) {
+    baseAssessment += `
+For cold/flu symptoms specifically:
+* Get plenty of rest
+* Stay hydrated with warm liquids
+* Use honey and lemon for sore throat (if not diabetic)
+* Use a humidifier to ease congestion
+* Consider over-the-counter cold medications as appropriate`;
+  }
+
+  baseAssessment += `
+
+IMPORTANT DISCLAIMER: This is a general informational assessment only and not a medical diagnosis. 
+Always consult with a qualified healthcare professional for proper diagnosis and treatment.`;
+
+  return baseAssessment;
+}
 
 function extractSuggestedSpecialties(assessment: string): string[] {
   const specialtiesMap: Record<string, string[]> = {

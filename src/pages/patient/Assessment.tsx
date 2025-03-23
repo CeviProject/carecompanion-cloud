@@ -60,51 +60,51 @@ const Assessment = () => {
   return (
     <div className="min-h-screen bg-background">
       <PatientNavbar />
-      <div className="container mx-auto py-6 max-w-7xl pt-20">
-        <div className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="container mx-auto py-10 max-w-7xl pt-24">
+        <div className="mb-10 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
           <div>
             <h1 className="text-4xl font-bold tracking-tight">Health Assessment</h1>
-            <p className="text-muted-foreground text-xl mt-2">
+            <p className="text-muted-foreground text-2xl mt-3">
               View your health assessments and recommendations.
             </p>
           </div>
           <Button 
             onClick={handleNewAssessment} 
             size="lg" 
-            className="text-lg py-6 px-6 rounded-xl"
+            className="text-xl py-8 px-8 rounded-xl"
           >
             New Assessment
           </Button>
         </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="mb-6 p-1 text-lg">
-            <TabsTrigger value="latest" className="text-lg px-6 py-3">Latest Assessment</TabsTrigger>
-            <TabsTrigger value="history" className="text-lg px-6 py-3">Assessment History</TabsTrigger>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
+          <TabsList className="mb-8 p-2 text-xl">
+            <TabsTrigger value="latest" className="text-xl px-8 py-4">Latest Assessment</TabsTrigger>
+            <TabsTrigger value="history" className="text-xl px-8 py-4">Assessment History</TabsTrigger>
           </TabsList>
           
           <TabsContent value="latest">
             {isLoading ? (
               <Card className="animate-pulse shadow-lg">
                 <CardHeader>
-                  <div className="h-8 bg-gray-200 rounded w-1/3 mb-3"></div>
-                  <div className="h-6 bg-gray-200 rounded w-1/4"></div>
+                  <div className="h-10 bg-gray-200 rounded w-1/3 mb-4"></div>
+                  <div className="h-8 bg-gray-200 rounded w-1/4"></div>
                 </CardHeader>
                 <CardContent>
-                  <div className="h-60 bg-gray-200 rounded"></div>
+                  <div className="h-80 bg-gray-200 rounded"></div>
                 </CardContent>
               </Card>
             ) : latestQuery ? (
               <HealthAssessment assessment={latestQuery.ai_assessment} queryData={latestQuery} />
             ) : (
               <Card className="shadow-lg border-2">
-                <CardContent className="flex flex-col items-center justify-center py-16 space-y-6">
-                  <FileText className="h-24 w-24 text-gray-400" />
-                  <p className="text-center text-gray-600 text-xl">No health assessments found. Start your first assessment now.</p>
+                <CardContent className="flex flex-col items-center justify-center py-20 space-y-8">
+                  <FileText className="h-28 w-28 text-gray-400" />
+                  <p className="text-center text-gray-600 text-2xl">No health assessments found. Start your first assessment now.</p>
                   <Button 
                     onClick={handleNewAssessment}
                     size="lg"
-                    className="text-lg py-6 px-8 rounded-xl"
+                    className="text-xl py-8 px-10 rounded-xl"
                   >
                     Get Your First Assessment
                   </Button>
@@ -115,44 +115,44 @@ const Assessment = () => {
           
           <TabsContent value="history">
             {isLoading ? (
-              <div className="grid gap-6">
+              <div className="grid gap-8">
                 {[1, 2].map(i => (
                   <Card key={i} className="animate-pulse shadow-lg">
                     <CardHeader>
-                      <div className="h-7 bg-gray-200 rounded w-1/3"></div>
+                      <div className="h-8 bg-gray-200 rounded w-1/3"></div>
                     </CardHeader>
                     <CardContent>
-                      <div className="h-6 bg-gray-200 rounded w-2/3 mb-3"></div>
-                      <div className="h-6 bg-gray-200 rounded w-1/2"></div>
+                      <div className="h-7 bg-gray-200 rounded w-2/3 mb-4"></div>
+                      <div className="h-7 bg-gray-200 rounded w-1/2"></div>
                     </CardContent>
                   </Card>
                 ))}
               </div>
             ) : pastQueries.length > 0 ? (
-              <div className="grid gap-6">
+              <div className="grid gap-8">
                 {pastQueries.map(query => (
                   <Card 
                     key={query.id} 
                     className="hover:shadow-xl transition-shadow cursor-pointer shadow-md border-2"
                     onClick={() => handleViewQuery(query)}
                   >
-                    <CardHeader className="pb-3">
+                    <CardHeader className="pb-4">
                       <CardTitle className="text-2xl">
                         Health Query on {format(new Date(query.created_at), 'MMMM d, yyyy')}
                       </CardTitle>
-                      <CardDescription className="flex items-center text-lg">
-                        <Clock className="h-5 w-5 mr-2" /> 
+                      <CardDescription className="flex items-center text-xl">
+                        <Clock className="h-6 w-6 mr-2" /> 
                         {format(new Date(query.created_at), 'h:mm a')}
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
                       <p className="line-clamp-2 text-gray-700 text-xl">{query.query_text}</p>
-                      <div className="flex items-center justify-between mt-4">
-                        <div className="flex items-center space-x-2 text-lg text-gray-500">
-                          <Calendar className="h-5 w-5" />
+                      <div className="flex items-center justify-between mt-6">
+                        <div className="flex items-center space-x-3 text-xl text-gray-500">
+                          <Calendar className="h-6 w-6" />
                           <span>{format(new Date(query.created_at), 'MMM d, yyyy')}</span>
                         </div>
-                        <Button variant="outline" size="lg" className="text-lg">
+                        <Button variant="outline" size="lg" className="text-xl py-6 px-6">
                           View Details
                         </Button>
                       </div>
@@ -162,7 +162,7 @@ const Assessment = () => {
               </div>
             ) : (
               <Card className="shadow-lg border-2">
-                <CardContent className="py-16 text-center text-gray-600 text-xl">
+                <CardContent className="py-20 text-center text-gray-600 text-2xl">
                   <p>No previous assessments found.</p>
                 </CardContent>
               </Card>

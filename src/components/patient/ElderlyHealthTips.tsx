@@ -113,6 +113,17 @@ const ElderlyHealthTips = () => {
       
       if (!response.ok) {
         const errorText = await response.text();
+        console.error('Failed to generate tip response:', errorText);
+        
+        // Provide a fallback tip when the API fails
+        const fallbackTip = {
+          title: "Stay Hydrated",
+          content: "As we age, our sense of thirst may decrease. Remember to drink water regularly throughout the day, even when not feeling thirsty. Proper hydration helps maintain energy levels, supports kidney function, and can prevent confusion. Keep a water bottle within easy reach at all times.",
+          category: "Wellness"
+        };
+        
+        setTip(fallbackTip);
+        
         throw new Error(`Failed to generate tip: ${response.status} ${errorText}`);
       }
       
@@ -131,9 +142,9 @@ const ElderlyHealthTips = () => {
     } catch (error: any) {
       console.error('Error generating elderly tip:', error.message);
       toast({
-        title: "Error",
-        description: `Failed to generate tip: ${error.message}`,
-        variant: "destructive",
+        title: "Note",
+        description: `Using a pre-saved health tip due to temporary service issue.`,
+        variant: "default",
       });
     } finally {
       setIsLoading(false);
@@ -141,25 +152,25 @@ const ElderlyHealthTips = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="flex justify-between items-center">
         <h2 className="text-3xl font-bold">Health Tips</h2>
         <Button 
           variant="outline" 
           onClick={generateTip} 
           disabled={isLoading}
-          className="bg-gradient-to-r from-blue-100 to-green-100 hover:from-blue-200 hover:to-green-200 text-lg py-6 px-6 rounded-xl"
+          className="bg-gradient-to-r from-blue-100 to-green-100 hover:from-blue-200 hover:to-green-200 text-xl py-7 px-8 rounded-xl"
           size="lg"
         >
           {isLoading ? (
             <>
-              <RefreshCw className="mr-3 h-5 w-5 animate-spin" />
-              <span className="text-lg">Generating...</span>
+              <RefreshCw className="mr-4 h-6 w-6 animate-spin" />
+              <span className="text-xl">Generating...</span>
             </>
           ) : (
             <>
-              <RefreshCw className="mr-3 h-5 w-5" />
-              <span className="text-lg">New Tip</span>
+              <RefreshCw className="mr-4 h-6 w-6" />
+              <span className="text-xl">New Tip</span>
             </>
           )}
         </Button>
@@ -167,24 +178,24 @@ const ElderlyHealthTips = () => {
 
       {!tip && !isLoading && (
         <Card className="shadow-lg border-2">
-          <CardContent className="py-12">
-            <p className="text-center text-gray-500 text-xl">No tips generated yet. Click "New Tip" to get started.</p>
+          <CardContent className="py-16">
+            <p className="text-center text-gray-500 text-2xl">No tips generated yet. Click "New Tip" to get started.</p>
           </CardContent>
         </Card>
       )}
 
       {tip && (
         <Card className="transition-all duration-300 hover:shadow-xl border-t-4 border-t-green-500 shadow-lg">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-2xl text-green-800">{tip.title}</CardTitle>
+          <CardHeader className="pb-4">
+            <CardTitle className="text-3xl text-green-800">{tip.title}</CardTitle>
             {tip.category && (
-              <CardDescription className="text-green-600 text-lg">
+              <CardDescription className="text-green-600 text-xl">
                 {tip.category}
               </CardDescription>
             )}
           </CardHeader>
           <CardContent>
-            <p className="whitespace-pre-line text-xl leading-relaxed">{tip.content}</p>
+            <p className="whitespace-pre-line text-2xl leading-relaxed">{tip.content}</p>
           </CardContent>
         </Card>
       )}
