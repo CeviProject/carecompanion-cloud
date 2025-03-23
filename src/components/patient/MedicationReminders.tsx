@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,8 +9,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
-import { PlusCircle, Calendar as CalendarIcon, Clock, Pill, Trash2, Check, RefreshCw } from 'lucide-react';
-import { format, addDays, isToday } from 'date-fns';
+import { PlusCircle, Calendar as CalendarIcon, Clock, Pill, Trash2, Check, RefreshCw, Bell, Sparkle } from 'lucide-react';
+import { format, addDays, isToday, parseISO } from 'date-fns';
 import { cn } from "@/lib/utils";
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
@@ -423,12 +424,15 @@ const MedicationReminders = () => {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold">Medication Reminders</h2>
+        <h2 className="text-2xl font-bold flex items-center">
+          <Pill className="h-6 w-6 mr-2 text-primary" />
+          Medication Reminders
+        </h2>
         <div className="flex gap-2">
           <Button 
             variant="outline" 
             onClick={handleRefreshMedications}
-            className="mr-2"
+            className="mr-2 border-primary/30 hover:bg-primary/5"
           >
             <RefreshCw className="mr-2 h-4 w-4" />
             Refresh List
@@ -437,19 +441,23 @@ const MedicationReminders = () => {
             variant="outline" 
             onClick={syncWithGoogleCalendar} 
             disabled={isSyncingCalendar}
+            className="border-primary/30 hover:bg-primary/5"
           >
             <RefreshCw className={cn("mr-2 h-4 w-4", isSyncingCalendar && "animate-spin")} />
             {isSyncingCalendar ? 'Syncing...' : 'Sync to Google Calendar'}
           </Button>
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>
-              <Button>
+              <Button className="bg-primary hover:bg-primary/90">
                 <PlusCircle className="mr-2 h-4 w-4" /> Add Medication
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-md">
               <DialogHeader>
-                <DialogTitle>Add New Medication</DialogTitle>
+                <DialogTitle className="flex items-center">
+                  <Pill className="h-5 w-5 mr-2 text-primary" />
+                  Add New Medication
+                </DialogTitle>
                 <DialogDescription>
                   Set up reminders for your medications.
                 </DialogDescription>
@@ -463,6 +471,7 @@ const MedicationReminders = () => {
                       placeholder="e.g. Aspirin"
                       value={newMedication.name}
                       onChange={(e) => setNewMedication({...newMedication, name: e.target.value})}
+                      className="border-primary/30 focus-visible:ring-primary"
                     />
                   </div>
                   <div className="space-y-2">
@@ -472,6 +481,7 @@ const MedicationReminders = () => {
                       placeholder="e.g. 500mg"
                       value={newMedication.dosage}
                       onChange={(e) => setNewMedication({...newMedication, dosage: e.target.value})}
+                      className="border-primary/30 focus-visible:ring-primary"
                     />
                   </div>
                 </div>
@@ -482,7 +492,7 @@ const MedicationReminders = () => {
                     value={newMedication.frequency}
                     onValueChange={(value) => setNewMedication({...newMedication, frequency: value})}
                   >
-                    <SelectTrigger id="frequency">
+                    <SelectTrigger id="frequency" className="border-primary/30 focus-visible:ring-primary">
                       <SelectValue placeholder="Select frequency" />
                     </SelectTrigger>
                     <SelectContent>
@@ -497,12 +507,16 @@ const MedicationReminders = () => {
                 
                 <div className="space-y-2">
                   <Label htmlFor="time">Time to Take</Label>
-                  <Input 
-                    id="time" 
-                    type="time"
-                    value={newMedication.time}
-                    onChange={(e) => setNewMedication({...newMedication, time: e.target.value})}
-                  />
+                  <div className="relative">
+                    <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+                    <Input 
+                      id="time" 
+                      type="time"
+                      value={newMedication.time}
+                      onChange={(e) => setNewMedication({...newMedication, time: e.target.value})}
+                      className="pl-10 border-primary/30 focus-visible:ring-primary"
+                    />
+                  </div>
                 </div>
                 
                 <div className="grid grid-cols-2 gap-4">
@@ -514,7 +528,7 @@ const MedicationReminders = () => {
                           id="start_date"
                           variant={"outline"}
                           className={cn(
-                            "w-full justify-start text-left font-normal"
+                            "w-full justify-start text-left font-normal border-primary/30 hover:bg-primary/5"
                           )}
                         >
                           <CalendarIcon className="mr-2 h-4 w-4" />
@@ -536,6 +550,7 @@ const MedicationReminders = () => {
                             }
                           }}
                           initialFocus
+                          className="p-3 pointer-events-auto"
                         />
                       </PopoverContent>
                     </Popover>
@@ -549,7 +564,7 @@ const MedicationReminders = () => {
                           id="end_date"
                           variant={"outline"}
                           className={cn(
-                            "w-full justify-start text-left font-normal"
+                            "w-full justify-start text-left font-normal border-primary/30 hover:bg-primary/5"
                           )}
                         >
                           <CalendarIcon className="mr-2 h-4 w-4" />
@@ -582,7 +597,7 @@ const MedicationReminders = () => {
                           }}
                           disabled={(date) => date < addDays(newMedication.start_date, 1)}
                           initialFocus
-                          className="border-t"
+                          className="border-t p-3 pointer-events-auto"
                         />
                       </PopoverContent>
                     </Popover>
@@ -596,6 +611,7 @@ const MedicationReminders = () => {
                     placeholder="Any special instructions..."
                     value={newMedication.notes}
                     onChange={(e) => setNewMedication({...newMedication, notes: e.target.value})}
+                    className="border-primary/30 focus-visible:ring-primary"
                   />
                 </div>
               </div>
@@ -606,7 +622,7 @@ const MedicationReminders = () => {
                 }}>
                   Cancel
                 </Button>
-                <Button onClick={handleAddMedication}>
+                <Button onClick={handleAddMedication} className="bg-primary hover:bg-primary/90">
                   Add Medication
                 </Button>
               </DialogFooter>
@@ -631,11 +647,14 @@ const MedicationReminders = () => {
           ))}
         </div>
       ) : medications.length === 0 ? (
-        <Card>
+        <Card className="bg-gradient-to-br from-white to-primary/5 shadow-md">
           <CardContent className="flex flex-col items-center justify-center py-10 space-y-4">
-            <Pill className="h-12 w-12 text-gray-400" />
-            <p className="text-center text-gray-500">No medications found. Add your first medication to get started.</p>
-            <Button onClick={() => setIsAddDialogOpen(true)}>
+            <div className="relative">
+              <Pill className="h-16 w-16 text-primary/40" />
+              <Sparkle className="h-6 w-6 text-yellow-400 absolute top-0 right-0" />
+            </div>
+            <p className="text-center text-gray-500 max-w-md">No medications found. Add your first medication to get started.</p>
+            <Button onClick={() => setIsAddDialogOpen(true)} className="bg-primary hover:bg-primary/90">
               <PlusCircle className="mr-2 h-4 w-4" /> Add Medication
             </Button>
           </CardContent>
@@ -643,20 +662,24 @@ const MedicationReminders = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {medications.map((med) => (
-            <Card key={med.id}>
+            <Card key={med.id} className={cn(
+              "transition-all duration-300 hover:shadow-md border border-primary/10 overflow-hidden group",
+              isToday(parseISO(med.start_date)) && "border-l-4 border-l-primary"
+            )}>
+              <div className="h-1 bg-gradient-to-r from-primary/40 to-primary/5"></div>
               <CardHeader className="pb-2">
                 <div className="flex justify-between items-start">
-                  <div>
-                    <CardTitle className="flex items-center">
-                      <Pill className="h-4 w-4 mr-2 text-blue-500" />
+                  <div className="flex-1">
+                    <CardTitle className="flex items-center group-hover:text-primary transition-colors">
+                      <Pill className="h-4 w-4 mr-2 text-primary" />
                       {med.name}
                     </CardTitle>
-                    <p className="text-sm font-medium mt-1">{med.dosage}</p>
+                    <p className="text-sm font-medium mt-1 text-primary/80">{med.dosage}</p>
                   </div>
                   <Button 
                     variant="ghost" 
                     size="icon"
-                    className="h-8 w-8 text-red-500"
+                    className="h-8 w-8 text-red-500 opacity-60 hover:opacity-100 hover:bg-red-50"
                     onClick={() => handleDeleteMedication(med.id)}
                   >
                     <Trash2 className="h-4 w-4" />
@@ -666,29 +689,33 @@ const MedicationReminders = () => {
               <CardContent className="pb-2">
                 <div className="space-y-2">
                   <div className="flex items-center text-sm">
-                    <Clock className="h-4 w-4 mr-2 text-gray-500" />
+                    <Clock className="h-4 w-4 mr-2 text-primary/60" />
                     <span>
-                      {med.frequency.replace(/_/g, ' ')} at {formatTime(med.time)}
+                      {med.frequency.replace(/_/g, ' ')} at {formatTimeWithAMPM(med.time)}
                     </span>
                   </div>
                   <div className="flex items-center text-sm">
-                    <CalendarIcon className="h-4 w-4 mr-2 text-gray-500" />
+                    <CalendarIcon className="h-4 w-4 mr-2 text-primary/60" />
                     <span>
                       From {formatDate(med.start_date)}
                       {med.end_date ? ` to ${formatDate(med.end_date)}` : ''}
                     </span>
                   </div>
                   {med.notes && (
-                    <p className="text-sm mt-2 text-gray-600">
+                    <div className="mt-2 p-2 bg-gray-50 rounded-md text-sm text-gray-600 border-l-2 border-primary/30">
                       {med.notes}
-                    </p>
+                    </div>
                   )}
                 </div>
               </CardContent>
-              <CardFooter className="pt-2">
-                <div className="flex items-center text-xs text-gray-500">
-                  <Check className="h-3 w-3 mr-1" />
+              <CardFooter className="pt-2 text-xs text-gray-500 flex justify-between items-center">
+                <div className="flex items-center">
+                  <Check className="h-3 w-3 mr-1 text-green-500" />
                   Added on {formatDate(med.created_at)}
+                </div>
+                <div className="flex items-center">
+                  <Bell className="h-3 w-3 mr-1 text-amber-500" />
+                  {formatTimeWithAMPM(med.time)}
                 </div>
               </CardFooter>
             </Card>
@@ -699,12 +726,12 @@ const MedicationReminders = () => {
   );
 };
 
-const formatTime = (time: string): string => {
-  const [hours, minutes] = time.split(':');
+const formatTimeWithAMPM = (time: string): string => {
+  const [hours, minutes] = time.split(':').map(Number);
   const hour = parseInt(hours, 10);
   const meridiem = hour >= 12 ? 'PM' : 'AM';
   const hour12 = hour % 12 || 12;
-  return `${hour12}:${minutes} ${meridiem}`;
+  return `${hour12}:${minutes.toString().padStart(2, '0')} ${meridiem}`;
 };
 
 const formatDate = (dateString: string): string => {
