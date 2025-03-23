@@ -345,7 +345,7 @@ input:-webkit-autofill:focus {
 }
 
 .gradient-text {
-  background: linear-gradient(to right, theme('colors.primary.DEFAULT'), theme('colors.destructive'), theme('colors.primary.DEFAULT'));
+  background: linear-gradient(to right, theme('colors.primary.DEFAULT'), theme('colors.destructive.DEFAULT'), theme('colors.primary.DEFAULT'));
   background-size: 200% auto;
   color: transparent;
   -webkit-background-clip: text;
