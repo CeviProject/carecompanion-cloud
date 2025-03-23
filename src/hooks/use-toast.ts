@@ -1,22 +1,19 @@
+import * as React from "react"
 import {
   Toast,
   ToastActionElement,
   ToastProps,
 } from "@/components/ui/toast"
 
-import {
-  useToast as useToastPrimitive,
-} from "@radix-ui/react-toast"
-
-const TOAST_LIMIT = 5
-const TOAST_REMOVE_DELAY = 1000000
-
-type ToasterToast = Toast & {
+type ToasterToastProps = Toast & {
   id: string
   title?: React.ReactNode
   description?: React.ReactNode
   action?: ToastActionElement
 }
+
+const TOAST_LIMIT = 5
+const TOAST_REMOVE_DELAY = 1000000
 
 const actionTypes = {
   ADD_TOAST: "ADD_TOAST",
@@ -37,23 +34,23 @@ type ActionType = typeof actionTypes
 type Action =
   | {
       type: ActionType["ADD_TOAST"]
-      toast: Omit<ToasterToast, "id">
+      toast: Omit<ToasterToastProps, "id">
     }
   | {
       type: ActionType["UPDATE_TOAST"]
-      toast: Partial<ToasterToast> & Pick<ToasterToast, "id">
+      toast: Partial<ToasterToastProps> & Pick<ToasterToastProps, "id">
     }
   | {
       type: ActionType["DISMISS_TOAST"]
-      toastId?: ToasterToast["id"]
+      toastId?: ToasterToastProps["id"]
     }
   | {
       type: ActionType["REMOVE_TOAST"]
-      toastId?: ToasterToast["id"]
+      toastId?: ToasterToastProps["id"]
     }
 
 interface State {
-  toasts: ToasterToast[]
+  toasts: ToasterToastProps[]
 }
 
 const toastTimeouts = new Map<string, ReturnType<typeof setTimeout>>()
@@ -129,12 +126,12 @@ function dispatch(action: Action) {
   })
 }
 
-type Toast = Omit<ToasterToast, "id">
+type ToastProps = Omit<ToasterToastProps, "id">
 
-function toast({ ...props }: Toast) {
+function toast({ ...props }: ToastProps) {
   const id = genId()
 
-  const update = (props: ToasterToast) =>
+  const update = (props: ToasterToastProps) =>
     dispatch({
       type: "UPDATE_TOAST",
       toast: { ...props, id },
