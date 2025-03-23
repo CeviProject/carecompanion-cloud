@@ -17,6 +17,16 @@ serve(async (req) => {
   }
 
   try {
+    // Check for authorization header
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      console.error("Missing authorization header");
+      return new Response(
+        JSON.stringify({ success: false, message: "Missing authorization header" }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     if (!GEMINI_API_KEY) {
       console.error("GEMINI_API_KEY environment variable not set");
       throw new Error("GEMINI_API_KEY environment variable not set");

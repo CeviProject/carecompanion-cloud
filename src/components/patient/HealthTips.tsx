@@ -129,7 +129,7 @@ const HealthTips = () => {
     try {
       const { data, error } = await supabase
         .from('health_queries')
-        .select('query_text, patient_data')
+        .select('query_text, patient_data, ai_assessment')
         .eq('patient_id', user?.id)
         .order('created_at', { ascending: false })
         .limit(3);
@@ -249,8 +249,13 @@ const HealthTips = () => {
         variant: "default",
       });
       
+      const { data: sessionData } = await supabase.auth.getSession();
+      
       const { data, error } = await supabase.functions.invoke('generate-health-tip', {
-        body: contextData
+        body: contextData,
+        headers: {
+          Authorization: `Bearer ${sessionData.session?.access_token}`
+        }
       });
 
       if (error) throw error;
@@ -314,8 +319,13 @@ const HealthTips = () => {
         recentIssues: recentHealthIssues.length > 0 ? recentHealthIssues : []
       };
       
+      const { data: sessionData } = await supabase.auth.getSession();
+      
       const { data, error } = await supabase.functions.invoke('generate-health-tip', {
-        body: contextData
+        body: contextData,
+        headers: {
+          Authorization: `Bearer ${sessionData.session?.access_token}`
+        }
       });
 
       if (error) throw error;
