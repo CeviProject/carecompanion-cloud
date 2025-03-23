@@ -149,9 +149,9 @@ const HealthTips = () => {
             }
           }
           
-          // Next, try to extract from AI assessment
+          // Next, try to extract from AI assessment - Fix the TypeScript error
           if (item.ai_assessment && typeof item.ai_assessment === 'object') {
-            if ('assessment' in item.ai_assessment) {
+            if ('assessment' in (item.ai_assessment as object)) {
               return (item.ai_assessment as any).assessment;
             }
             // If there's a reasonable string alternative, use that
