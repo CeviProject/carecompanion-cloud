@@ -299,9 +299,10 @@ const HealthTips = () => {
       console.log('Invoking generate-health-tip function with auth token');
       
       const { data, error } = await supabase.functions.invoke('generate-health-tip', {
-        body: contextData,
+        body: JSON.stringify(contextData),
         headers: {
-          Authorization: `Bearer ${sessionData.session.access_token}`
+          Authorization: `Bearer ${sessionData.session.access_token}`,
+          'Content-Type': 'application/json'
         }
       });
       
@@ -395,9 +396,10 @@ const HealthTips = () => {
         JSON.stringify(contextData).substring(0, 200));
       
       const { data, error } = await supabase.functions.invoke('generate-health-tip', {
-        body: contextData,
+        body: JSON.stringify(contextData),
         headers: {
-          Authorization: `Bearer ${accessToken}`
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
         }
       });
       

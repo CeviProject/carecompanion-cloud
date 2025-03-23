@@ -29,7 +29,7 @@ serve(async (req) => {
       );
     }
 
-    console.log("Authorization header verified");
+    console.log("Authorization header present:", !!authHeader);
 
     if (!GEMINI_API_KEY) {
       console.error("GEMINI_API_KEY environment variable not set");
@@ -39,15 +39,29 @@ serve(async (req) => {
       );
     }
 
+    console.log("GEMINI_API_KEY is configured");
+
     // Parse request body and handle potential errors
     let requestData;
     try {
-      requestData = await req.json();
-      console.log("Request data received:", JSON.stringify(requestData).substring(0, 500));
+      const requestText = await req.text();
+      console.log("Raw request body:", requestText.substring(0, 200) + "...");
+      
+      try {
+        requestData = JSON.parse(requestText);
+      } catch (jsonError) {
+        console.error("JSON parse error:", jsonError);
+        return new Response(
+          JSON.stringify({ success: false, message: "Invalid JSON in request body", error: jsonError.message }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      console.log("Request data parsed successfully");
     } catch (parseError) {
       console.error("Failed to parse request body:", parseError);
       return new Response(
-        JSON.stringify({ success: false, message: "Invalid request body format" }),
+        JSON.stringify({ success: false, message: "Invalid request body format", error: parseError.message }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -63,10 +77,21 @@ serve(async (req) => {
     }
 
     console.log("Generating tip for user:", user_id);
-    console.log("Recent health issues:", recentIssues ? JSON.stringify(recentIssues).substring(0, 200) : "Not available");
+    
+    // Validate and sanitize health issues
+    let sanitizedIssues = [];
+    if (Array.isArray(recentIssues)) {
+      sanitizedIssues = recentIssues
+        .filter(issue => typeof issue === 'string' && issue.trim().length > 0)
+        .map(issue => issue.trim());
+      
+      console.log("Sanitized health issues:", JSON.stringify(sanitizedIssues));
+    } else {
+      console.log("No valid health issues provided, will generate general tip");
+    }
     
     // Determine if we should generate a contextual tip or general tip
-    const isContextual = Array.isArray(recentIssues) && recentIssues.length > 0;
+    const isContextual = sanitizedIssues.length > 0;
     let prompt = "";
     
     if (isContextual) {
@@ -74,7 +99,7 @@ serve(async (req) => {
       prompt = `
         Generate a helpful health tip that would be relevant for someone with the following recent health concerns:
         
-        ${recentIssues.map((issue, index) => `${index + 1}. ${issue}`).join('\n')}
+        ${sanitizedIssues.map((issue, index) => `${index + 1}. ${issue}`).join('\n')}
         
         The tip should be educational, evidence-based, and concise, and directly relevant to the health concerns listed.
         Include a short title (max 10 words) and a detailed explanation (50-100 words).
@@ -102,24 +127,27 @@ serve(async (req) => {
     try {
       // Call Gemini AI API with proper error handling
       const url = `${GEMINI_API_URL}?key=${GEMINI_API_KEY}`;
-      console.log("Gemini API URL:", url.split("?")[0]); // Log URL without the API key
+      
+      const geminiRequestBody = {
+        contents: [
+          {
+            parts: [
+              {
+                text: prompt,
+              },
+            ],
+          },
+        ],
+      };
+      
+      console.log("Gemini API request prepared");
       
       const geminiResponse = await fetch(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                {
-                  text: prompt,
-                },
-              ],
-            },
-          ],
-        }),
+        body: JSON.stringify(geminiRequestBody),
       });
 
       console.log("Gemini API response status:", geminiResponse.status);
@@ -137,8 +165,25 @@ serve(async (req) => {
         );
       }
 
-      const data = await geminiResponse.json();
-      console.log("Received response from Gemini API");
+      const responseText = await geminiResponse.text();
+      console.log("Raw Gemini API response:", responseText.substring(0, 200) + "...");
+      
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (jsonError) {
+        console.error("Failed to parse Gemini API response as JSON:", jsonError);
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            message: "Failed to parse Gemini API response as JSON",
+            rawResponse: responseText.substring(0, 500)
+          }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      console.log("Parsed Gemini API response");
       
       if (!data.candidates || data.candidates.length === 0) {
         console.error("No candidates in Gemini API response:", JSON.stringify(data));
