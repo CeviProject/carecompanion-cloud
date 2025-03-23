@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -727,11 +726,11 @@ const MedicationReminders = () => {
 };
 
 const formatTimeWithAMPM = (time: string): string => {
-  const [hours, minutes] = time.split(':').map(Number);
+  const [hours, minutes] = time.split(':');
   const hour = parseInt(hours, 10);
   const meridiem = hour >= 12 ? 'PM' : 'AM';
   const hour12 = hour % 12 || 12;
-  return `${hour12}:${minutes.toString().padStart(2, '0')} ${meridiem}`;
+  return `${hour12}:${minutes.padStart(2, '0')} ${meridiem}`;
 };
 
 const formatDate = (dateString: string): string => {
