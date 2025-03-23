@@ -45,7 +45,7 @@ const DoctorsList = () => {
           years_experience,
           location,
           bio,
-          profiles (
+          profiles:id(
             id,
             first_name,
             last_name
@@ -53,36 +53,42 @@ const DoctorsList = () => {
         `);
       
       if (specialty !== 'all') {
-        query = query.eq('specialty', specialty);
+        query = query.ilike('specialty', `%${specialty}%`);
       }
       
       const { data, error } = await query;
       
       if (error) {
+        console.error('Error fetching doctors:', error);
         toast.error(`Error fetching doctors: ${error.message}`);
         throw error;
       }
       
-      // Transform the data to match our Doctor interface and filter out those with null profiles
-      const formattedDoctors = data?.filter(doctor => doctor.profiles !== null)
-        .map(doctor => ({
-          id: doctor.id,
-          profiles: doctor.profiles,
-          specialty: doctor.specialty,
-          years_experience: doctor.years_experience,
-          location: doctor.location,
-          bio: doctor.bio
-        })) || [];
+      console.log('Fetched doctors data:', data);
       
+      // Transform the data to match our Doctor interface
+      const formattedDoctors = data?.map(doctor => ({
+        id: doctor.id,
+        profiles: doctor.profiles,
+        specialty: doctor.specialty,
+        years_experience: doctor.years_experience,
+        location: doctor.location,
+        bio: doctor.bio
+      })) || [];
+      
+      console.log('Formatted doctors:', formattedDoctors);
       setDoctors(formattedDoctors);
 
       // Get unique specialties for the filter
       if (specialty === 'all') {
-        const uniqueSpecialties = [...new Set(data?.map(doc => doc.specialty))];
+        const allSpecialties = data?.map(doc => doc.specialty) || [];
+        const uniqueSpecialties = [...new Set(allSpecialties.filter(Boolean))];
+        console.log('Available specialties:', uniqueSpecialties);
         setSpecialties(uniqueSpecialties);
       }
     } catch (error) {
       console.error('Error fetching doctors:', error);
+      toast.error('Failed to load doctors. Please try again later.');
     } finally {
       setLoading(false);
     }

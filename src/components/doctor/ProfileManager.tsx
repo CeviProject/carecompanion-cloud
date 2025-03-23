@@ -5,9 +5,31 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+
+// Common medical specialties
+const MEDICAL_SPECIALTIES = [
+  'Cardiology',
+  'Dermatology',
+  'Endocrinology',
+  'Family Medicine',
+  'Gastroenterology',
+  'General Surgery',
+  'Internal Medicine',
+  'Neurology',
+  'Obstetrics and Gynecology',
+  'Oncology',
+  'Ophthalmology',
+  'Orthopedics',
+  'Pediatrics',
+  'Psychiatry',
+  'Pulmonology',
+  'Radiology',
+  'Urology'
+];
 
 const ProfileManager = () => {
   const { user } = useAuth();
@@ -17,6 +39,8 @@ const ProfileManager = () => {
   const [bio, setBio] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [customSpecialty, setCustomSpecialty] = useState('');
+  const [isCustomSpecialty, setIsCustomSpecialty] = useState(false);
 
   useEffect(() => {
     fetchProfile();
@@ -35,7 +59,10 @@ const ProfileManager = () => {
       if (error) throw error;
       
       if (data) {
-        setSpecialty(data.specialty || '');
+        const specialtyValue = data.specialty || '';
+        setSpecialty(specialtyValue);
+        setIsCustomSpecialty(!MEDICAL_SPECIALTIES.includes(specialtyValue));
+        setCustomSpecialty(specialtyValue);
         setLocation(data.location || '');
         setYearsExperience(data.years_experience?.toString() || '');
         setBio(data.bio || '');
@@ -54,10 +81,19 @@ const ProfileManager = () => {
     setSaving(true);
     
     try {
+      // Determine which specialty value to use
+      const finalSpecialty = isCustomSpecialty ? customSpecialty : specialty;
+      
+      if (!finalSpecialty) {
+        toast.error('Please select or enter a specialty');
+        setSaving(false);
+        return;
+      }
+      
       const { error } = await supabase
         .from('doctor_profiles')
         .update({
-          specialty,
+          specialty: finalSpecialty,
           location,
           years_experience: yearsExperience ? parseInt(yearsExperience) : null,
           bio
@@ -67,6 +103,12 @@ const ProfileManager = () => {
       if (error) throw error;
       
       toast.success('Profile saved successfully');
+      console.log('Doctor profile updated:', {
+        specialty: finalSpecialty,
+        location,
+        years_experience: yearsExperience ? parseInt(yearsExperience) : null,
+        bio
+      });
     } catch (error) {
       console.error('Error saving doctor profile:', error);
       toast.error('Failed to save your profile');
@@ -102,12 +144,50 @@ const ProfileManager = () => {
       <div className="space-y-6">
         <div className="space-y-3">
           <Label htmlFor="specialty">Specialty</Label>
-          <Input
-            id="specialty"
-            placeholder="e.g., Cardiology, Pediatrics, etc."
-            value={specialty}
-            onChange={(e) => setSpecialty(e.target.value)}
-          />
+          {isCustomSpecialty ? (
+            <div className="space-y-2">
+              <Input
+                id="customSpecialty"
+                placeholder="Enter your medical specialty"
+                value={customSpecialty}
+                onChange={(e) => setCustomSpecialty(e.target.value)}
+              />
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setIsCustomSpecialty(false)}
+                className="mt-1"
+              >
+                Choose from common specialties instead
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <Select
+                value={specialty}
+                onValueChange={setSpecialty}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a specialty" />
+                </SelectTrigger>
+                <SelectContent>
+                  {MEDICAL_SPECIALTIES.map(spec => (
+                    <SelectItem key={spec} value={spec}>
+                      {spec}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setIsCustomSpecialty(true)}
+                className="mt-1"
+              >
+                Enter custom specialty
+              </Button>
+            </div>
+          )}
         </div>
         
         <div className="space-y-3">

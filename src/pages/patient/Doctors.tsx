@@ -26,27 +26,33 @@ const PatientDoctors = () => {
           .select('*')
           .eq('patient_id', user.id)
           .order('created_at', { ascending: false })
-          .limit(1)
-          .single();
+          .limit(1);
 
         if (healthQueryError) {
-          if (healthQueryError.code !== 'PGRST116') { // PGRST116 is the "no rows returned" error
-            toast.error(`Error fetching health query: ${healthQueryError.message}`);
-          }
-          // It's okay if there are no health queries yet
+          console.error('Error fetching health query:', healthQueryError);
+          toast.error(`Error fetching health recommendations: ${healthQueryError.message}`);
           setSuggestedSpecialties(null);
-        } else if (healthQuery) {
+          return;
+        }
+
+        if (healthQuery && healthQuery.length > 0) {
           // Extract suggestedSpecialties from patient_data if available
-          const patientData = healthQuery.patient_data as Json;
+          const patientData = healthQuery[0].patient_data as Json;
           
           // Safely access nested properties
-          const patientDataObj = patientData as unknown as Record<string, any>;
-          
-          setSuggestedSpecialties(patientDataObj?.suggestedSpecialties ?? null);
+          if (patientData) {
+            const patientDataObj = patientData as unknown as Record<string, any>;
+            setSuggestedSpecialties(patientDataObj?.suggestedSpecialties ?? null);
+          } else {
+            setSuggestedSpecialties(null);
+          }
+        } else {
+          setSuggestedSpecialties(null);
         }
       } catch (error) {
         console.error('Error fetching health query:', error);
         toast.error('There was a problem loading your health recommendations.');
+        setSuggestedSpecialties(null);
       } finally {
         setLoading(false);
       }
