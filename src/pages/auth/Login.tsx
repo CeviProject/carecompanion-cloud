@@ -21,7 +21,10 @@ const Login = () => {
   // If user is already authenticated, redirect to dashboard
   if (!authLoading && isAuthenticated && profile) {
     console.log('User already authenticated, redirecting from login page');
-    return <Navigate to={`/dashboard/${profile.role || 'patient'}`} replace />;
+    const redirectPath = profile.role === 'patient' 
+      ? '/patient/overview' 
+      : `/dashboard/${profile.role || 'patient'}`;
+    return <Navigate to={redirectPath} replace />;
   }
 
   const handleSubmit = async (e: React.FormEvent) => {

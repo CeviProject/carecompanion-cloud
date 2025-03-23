@@ -97,16 +97,16 @@ const Index = () => {
                   variant="outline"
                   size="lg"
                   className="rounded-full px-8 text-lg h-auto py-3"
-                  asChild
+                  onClick={() => navigate('/features')}
                 >
-                  <Link to="/features">Learn More</Link>
+                  Learn More
                 </Button>
                 {!isAuthenticated && (
                   <Button
                     variant="secondary"
                     size="lg"
                     className="rounded-full px-8 text-lg font-semibold bg-gradient-to-r from-green-100 to-green-200 hover:from-green-200 hover:to-green-300 text-green-800 h-auto py-3"
-                    onClick={() => window.location.href = "https://eldercare-bot-assistant.lovable.app/"}
+                    onClick={() => window.open("https://eldercare-bot-assistant.lovable.app/", "_blank")}
                   >
                     Try For Free
                   </Button>

@@ -7,7 +7,6 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-route
 import Index from "./pages/Index";
 import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
-import PatientDashboard from "./pages/dashboard/PatientDashboard";
 import DoctorDashboard from "./pages/dashboard/DoctorDashboard";
 import NotFound from "./pages/NotFound";
 import { AuthProvider, useAuth } from "./context/AuthContext";
@@ -74,7 +73,10 @@ const ProtectedRoute = ({
 
   if (requiredRole && profile?.role !== requiredRole) {
     console.log(`User role (${profile?.role}) doesn't match required role (${requiredRole}), redirecting`);
-    return <Navigate to={`/dashboard/${profile?.role || 'patient'}`} replace />;
+    const redirectPath = profile?.role === 'patient' 
+      ? '/patient/overview' 
+      : `/dashboard/${profile?.role || 'patient'}`;
+    return <Navigate to={redirectPath} replace />;
   }
 
   return <>{children}</>;
@@ -114,7 +116,9 @@ const PublicOnlyRoute = ({
 
   if (isAuthenticated) {
     console.log('User already authenticated, redirecting from public only route', location.pathname);
-    const defaultRedirect = `/dashboard/${profile?.role || 'patient'}`;
+    const defaultRedirect = profile?.role === 'patient' 
+      ? '/patient/overview' 
+      : `/dashboard/${profile?.role || 'patient'}`;
     const targetPath = redirectTo || defaultRedirect;
     console.log(`Redirecting to: ${targetPath}`);
     return <Navigate to={targetPath} replace />;
@@ -125,15 +129,6 @@ const PublicOnlyRoute = ({
 
 // App with Auth provider wrapper
 const AppWithAuth = () => {
-  const { isAuthenticated, profile } = useAuth();
-
-  // If authenticated, redirect patient to the overview page
-  useEffect(() => {
-    if (isAuthenticated && profile?.role === 'patient' && window.location.pathname === '/dashboard/patient') {
-      window.location.href = '/patient/overview';
-    }
-  }, [isAuthenticated, profile]);
-
   return (
     <Routes>
       <Route path="/" element={<Index />} />

@@ -105,7 +105,7 @@
 
   button, 
   [role="button"] {
-    @apply cursor-pointer transition-all duration-200;
+    @apply cursor-pointer transition-all duration-200 min-h-[56px] min-w-[56px];
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -164,7 +164,7 @@
   }
 
   .card-elderly {
-    @apply border border-border bg-card shadow-sm;
+    @apply border-2 bg-white shadow-lg;
   }
 
   .advice-container {
@@ -188,11 +188,11 @@
   }
 
   .advice-bullet-dot {
-    @apply text-2xl text-primary mr-3 font-bold;
+    @apply text-2xl text-medBlue mr-3 font-bold;
   }
 
   .advice-content {
-    @apply space-y-4 p-4 rounded-lg bg-card shadow-inner text-xl leading-relaxed;
+    @apply space-y-4 p-4 rounded-lg bg-white shadow-inner text-xl leading-relaxed;
   }
 
   .glass-card {

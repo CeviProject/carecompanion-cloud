@@ -10,7 +10,7 @@ import SignOutButton from '@/components/auth/SignOutButton';
 const Navbar = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, profile, isAuthenticated } = useAuth();
+  const { user, profile, isAuthenticated, loading } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
@@ -52,14 +52,14 @@ const Navbar = () => {
 
   // Handle the "Go to Dashboard" action
   const handleDashboardNavigation = () => {
-    console.log('Dashboard navigation triggered, auth state:', { isAuthenticated, profile });
+    console.log('Dashboard navigation triggered, auth state:', { isAuthenticated, profile, loading });
     if (isAuthenticated) {
       if (profile?.role === 'patient') {
         navigate('/patient/overview');
       } else if (profile?.role === 'doctor') {
         navigate('/dashboard/doctor');
       } else {
-        navigate('/auth/register');
+        navigate('/dashboard/' + (profile?.role || 'patient'));
       }
     } else {
       navigate('/auth/register');
@@ -132,7 +132,7 @@ const Navbar = () => {
               Features
             </Link>
             
-            {isAuthenticated && (
+            {isAuthenticated && !loading && (
               <Button 
                 onClick={handleDashboardNavigation}
                 className={cn(
@@ -148,13 +148,15 @@ const Navbar = () => {
 
           {/* Authentication buttons */}
           <div className="hidden md:flex items-center space-x-4">
-            {isAuthenticated ? (
+            {isAuthenticated && !loading ? (
               <>
                 <div className="text-sm font-medium">
                   {profile?.role === 'patient' ? 'Anonymous' : `Hello, ${profile?.first_name || 'User'}`}
                 </div>
                 <SignOutButton />
               </>
+            ) : loading ? (
+              <div className="w-20 h-9 bg-gray-200 animate-pulse rounded-full"></div>
             ) : (
               <>
                 <Button onClick={handleLoginClick} variant="outline" className="rounded-full">
@@ -225,7 +227,7 @@ const Navbar = () => {
               Features
             </button>
             
-            {isAuthenticated && (
+            {isAuthenticated && !loading && (
               <button
                 onClick={handleDashboardNavigation}
                 className={cn(
@@ -240,7 +242,7 @@ const Navbar = () => {
           </div>
           <div className="pt-4 pb-3 border-t border-border">
             <div className="flex items-center px-5">
-              {isAuthenticated ? (
+              {isAuthenticated && !loading ? (
                 <div className="w-full space-y-2">
                   <div className="flex items-center">
                     <User className="h-5 w-5 mr-2" />
@@ -250,6 +252,8 @@ const Navbar = () => {
                   </div>
                   <SignOutButton className="w-full" />
                 </div>
+              ) : loading ? (
+                <div className="w-full h-10 bg-gray-200 animate-pulse rounded"></div>
               ) : (
                 <div className="flex-shrink-0 w-full space-y-2">
                   <Button onClick={handleLoginClick} className="w-full mb-2" variant="outline">

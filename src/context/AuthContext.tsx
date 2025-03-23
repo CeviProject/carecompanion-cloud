@@ -92,10 +92,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const profileData = await fetchProfile(newSession.user.id);
         if (isMounted.current) {
           setProfile(profileData);
+          
+          // Handle redirection based on user role after successful authentication
+          if (profileData) {
+            console.log('Profile loaded, role:', profileData.role);
+            const targetPath = profileData.role === 'patient' 
+              ? '/patient/overview' 
+              : `/dashboard/${profileData.role}`;
+            console.log('Redirecting to', targetPath);
+            navigate(targetPath, { replace: true });
+          }
         }
       }
     }
-  }, [clearAuthState, fetchProfile]);
+  }, [clearAuthState, fetchProfile, navigate]);
 
   // Set up auth state management
   useEffect(() => {
@@ -138,6 +148,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             const profileData = await fetchProfile(existingSession.user.id);
             if (isMounted.current) {
               setProfile(profileData);
+              
+              // If we have a profile and not on a protected route, redirect to the appropriate dashboard
+              if (profileData) {
+                const path = window.location.pathname;
+                const isPublicRoute = path === '/' || path === '/features' || path === '/about' || 
+                                     path.startsWith('/auth/');
+                
+                if (isPublicRoute) {
+                  console.log('User is authenticated on public route, redirecting to dashboard');
+                  const targetPath = profileData.role === 'patient' 
+                    ? '/patient/overview' 
+                    : `/dashboard/${profileData.role}`;
+                  navigate(targetPath, { replace: true });
+                }
+              }
             }
           }
         }
@@ -161,7 +186,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         authSubscription.current = null;
       }
     };
-  }, [handleAuthChange, fetchProfile]);
+  }, [handleAuthChange, fetchProfile, navigate]);
 
   const signIn = async (email: string, password: string) => {
     try {
