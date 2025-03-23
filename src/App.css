@@ -1,42 +1,87 @@
+
 #root {
-  max-width: 1280px;
+  width: 100%;
   margin: 0 auto;
-  padding: 2rem;
   text-align: center;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+/* Increase contrast and visibility for elderly users */
+.high-contrast {
+  color: #000 !important;
+  background-color: #fff !important;
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
+/* Increase tap targets for elderly users */
+.elderly-friendly-button {
+  min-height: 56px !important;
+  min-width: 56px !important;
+  font-size: 1.1rem !important;
+  padding: 0.75rem 1.5rem !important;
+}
+
+/* Bigger touch targets for links */
+.elderly-friendly-link {
+  padding: 0.5rem !important;
+  margin: 0.25rem !important;
+  display: inline-block !important;
+}
+
+/* Improve focus states for accessibility */
+.focus-visible:focus {
+  outline: 3px solid #0073e6 !important;
+  outline-offset: 2px !important;
+}
+
+/* Increase font size for readability */
+.readable-text {
+  font-size: 1.1rem !important;
+  line-height: 1.6 !important;
+}
+
+/* Add visual cues for active elements */
+.active-element {
+  border-left: 4px solid #0073e6 !important;
+  padding-left: 1rem !important;
+}
+
+/* Improve form elements for elderly users */
+input, select, textarea {
+  font-size: 1.1rem !important;
+  padding: 0.75rem !important;
+  border-radius: 0.5rem !important;
+}
+
+/* Add shadows to cards for better depth perception */
+.card-enhanced {
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1) !important;
+  transition: box-shadow 0.3s ease !important;
+}
+
+.card-enhanced:hover {
+  box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Improve button visibility with hover effects */
+button:hover {
+  transform: translateY(-2px);
+  transition: transform 0.2s ease;
+}
+
+/* Support high contrast mode */
+@media (prefers-contrast: more) {
+  :root {
+    --primary: 210 100% 40%;
+    --foreground: 0 0% 0%;
+    --background: 0 0% 100%;
   }
-  to {
-    transform: rotate(360deg);
+}
+
+/* Reduce motion for users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
-}
-
-.card {
-  padding: 2em;
-}
-
-.read-the-docs {
-  color: #888;
 }

@@ -111,26 +111,26 @@ const PatientNavbar = () => {
   ];
 
   return (
-    <div className="fixed inset-x-0 top-16 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <div className="fixed top-0 left-0 right-0 z-50 border-b bg-background shadow-sm">
       {/* Mobile menu button */}
-      <div className="flex md:hidden justify-between items-center px-4 h-12 border-b">
-        <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
-          {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+      <div className="flex md:hidden justify-between items-center px-4 h-16 border-b">
+        <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="min-h-[48px] min-w-[48px]">
+          {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
         </Button>
-        <span className="font-medium text-sm">Patient Menu</span>
+        <span className="font-medium text-lg">Patient Menu</span>
         <SignOutButton variant="ghost" size="icon" showText={false} />
       </div>
 
       {/* Mobile navigation */}
       {mobileMenuOpen && (
         <div className="md:hidden">
-          <nav className="flex flex-col p-2 space-y-1 bg-card/95 backdrop-blur">
+          <nav className="flex flex-col p-4 space-y-3 bg-card/95 backdrop-blur">
             {navItems.map((item) => (
               <Link
                 key={item.path}
                 to={item.path}
                 className={cn(
-                  "flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium",
+                  "flex items-center justify-between rounded-lg px-4 py-3 text-lg font-medium",
                   isActive(item.path)
                     ? "bg-primary text-primary-foreground"
                     : "hover:bg-accent hover:text-accent-foreground"
@@ -138,11 +138,11 @@ const PatientNavbar = () => {
                 onClick={() => setMobileMenuOpen(false)}
               >
                 <div className="flex items-center gap-3">
-                  <item.icon className="h-4 w-4" />
+                  <item.icon className="h-5 w-5" />
                   <span>{item.label}</span>
                 </div>
                 {item.count ? (
-                  <Badge variant="secondary" className="ml-2">{item.count}</Badge>
+                  <Badge variant="secondary" className="ml-2 text-base">{item.count}</Badge>
                 ) : null}
               </Link>
             ))}
@@ -153,28 +153,28 @@ const PatientNavbar = () => {
       {/* Desktop navigation */}
       <div className="hidden md:block">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <nav className="flex items-center justify-between h-14">
-            <div className="flex items-center space-x-4 lg:space-x-6">
+          <nav className="flex items-center justify-between h-16">
+            <div className="flex items-center space-x-6 lg:space-x-8">
               {navItems.map((item) => (
                 <Link
                   key={item.path}
                   to={item.path}
                   className={cn(
-                    "flex items-center text-sm font-medium transition-colors hover:text-primary relative",
+                    "flex items-center text-lg font-medium transition-colors hover:text-primary relative",
                     isActive(item.path) 
-                      ? "text-primary" 
+                      ? "text-primary font-semibold" 
                       : "text-muted-foreground"
                   )}
                 >
-                  <item.icon className="h-4 w-4 mr-2" />
+                  <item.icon className="h-5 w-5 mr-2" />
                   {item.label}
                   {item.count ? (
-                    <Badge variant="secondary" className="ml-1">{item.count}</Badge>
+                    <Badge variant="secondary" className="ml-1 text-base">{item.count}</Badge>
                   ) : null}
                 </Link>
               ))}
             </div>
-            <SignOutButton />
+            <SignOutButton className="text-lg" />
           </nav>
         </div>
       </div>
