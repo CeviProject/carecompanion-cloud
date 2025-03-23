@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Heart, Plus, Share, Star, RefreshCw, Lightbulb } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
+import { toast } from '@/hooks/use-toast';
 
 interface HealthTip {
   id: string;
@@ -26,7 +26,8 @@ const HealthTips = () => {
   const { user } = useAuth();
   const [healthTips, setHealthTips] = useState<HealthTip[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isGenerating, setIsGenerating] = useState(false);
+  const [isGeneratingGeneral, setIsGeneratingGeneral] = useState(false);
+  const [isGeneratingContextual, setIsGeneratingContextual] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [newTip, setNewTip] = useState({
     title: '',
@@ -61,20 +62,10 @@ const HealthTips = () => {
                 });
                 
                 if (payload.new.is_public && payload.new.user_id !== user.id) {
-                  toast.info('New public health tip available!', {
-                    action: {
-                      label: 'View',
-                      onClick: () => {
-                        const tipElement = document.getElementById(`tip-${payload.new.id}`);
-                        if (tipElement) {
-                          tipElement.scrollIntoView({ behavior: 'smooth' });
-                          tipElement.classList.add('highlight-animation');
-                          setTimeout(() => {
-                            tipElement.classList.remove('highlight-animation');
-                          }, 2000);
-                        }
-                      },
-                    },
+                  toast({
+                    title: "New tip available!",
+                    description: "A new public health tip has been shared.",
+                    variant: "default",
                   });
                 }
               }
@@ -124,7 +115,11 @@ const HealthTips = () => {
       setHealthTips(uniqueTips as HealthTip[]);
     } catch (error: any) {
       console.error('Error fetching health tips:', error.message);
-      toast.error(`Failed to load health tips: ${error.message}`);
+      toast({
+        title: "Error",
+        description: `Failed to load health tips: ${error.message}`,
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -161,7 +156,11 @@ const HealthTips = () => {
   const handleAddTip = async () => {
     try {
       if (!newTip.title || !newTip.content) {
-        toast.error('Please fill in all required fields');
+        toast({
+          title: "Validation Error",
+          description: "Please fill in all required fields",
+          variant: "destructive",
+        });
         return;
       }
 
@@ -182,14 +181,22 @@ const HealthTips = () => {
 
       setNewTip({ title: '', content: '', is_public: false });
       setIsAddDialogOpen(false);
-      toast.success('Health tip added successfully!');
+      toast({
+        title: "Success",
+        description: "Health tip added successfully!",
+        variant: "default",
+      });
       
       if (newTip.is_public) {
         sendTipNotification(data as HealthTip, 'added');
       }
     } catch (error: any) {
       console.error('Error adding health tip:', error.message);
-      toast.error(`Failed to add health tip: ${error.message}`);
+      toast({
+        title: "Error",
+        description: `Failed to add health tip: ${error.message}`,
+        variant: "destructive",
+      });
     }
   };
 
@@ -197,7 +204,11 @@ const HealthTips = () => {
     try {
       const tipToUpdate = healthTips.find(tip => tip.id === tipId);
       if (tipToUpdate?.user_id !== user?.id) {
-        toast.error('You can only favorite your own health tips');
+        toast({
+          title: "Permission Error",
+          description: "You can only favorite your own health tips",
+          variant: "destructive",
+        });
         return;
       }
 
@@ -208,23 +219,35 @@ const HealthTips = () => {
 
       if (error) throw error;
       
-      toast.success(isFavorite ? 'Removed from favorites' : 'Added to favorites');
+      toast({
+        title: "Success",
+        description: isFavorite ? 'Removed from favorites' : 'Added to favorites',
+        variant: "default",
+      });
     } catch (error: any) {
       console.error('Error toggling favorite:', error.message);
-      toast.error(`Failed to update favorite status: ${error.message}`);
+      toast({
+        title: "Error",
+        description: `Failed to update favorite status: ${error.message}`,
+        variant: "destructive",
+      });
     }
   };
 
   const generateAITip = async () => {
     try {
-      setIsGenerating(true);
+      setIsGeneratingGeneral(true);
       
       const contextData = {
         user_id: user?.id,
         recentIssues: []
       };
       
-      toast.info('Generating general health tip...');
+      toast({
+        title: "Generating tip",
+        description: "Creating a general health tip...",
+        variant: "default",
+      });
       
       const { data, error } = await supabase.functions.invoke('generate-health-tip', {
         body: contextData
@@ -248,27 +271,43 @@ const HealthTips = () => {
           
         if (insertError) throw insertError;
         
-        toast.success('AI-generated health tip added!');
+        toast({
+          title: "Success",
+          description: "AI-generated health tip added!",
+          variant: "default",
+        });
       } else {
         throw new Error(data?.message || 'Failed to generate tip');
       }
     } catch (error: any) {
       console.error('Error generating AI tip:', error.message);
-      toast.error(`Failed to generate AI tip: ${error.message}`);
+      toast({
+        title: "Error",
+        description: `Failed to generate AI tip: ${error.message}`,
+        variant: "destructive",
+      });
     } finally {
-      setIsGenerating(false);
+      setIsGeneratingGeneral(false);
     }
   };
 
   const generateContextualTip = async () => {
     try {
-      if (recentHealthIssues.length === 0) {
-        toast.info('No recent health issues found. Generating general health tip instead.');
-      } else {
-        toast.info('Generating health tip based on your recent health concerns');
-      }
+      setIsGeneratingContextual(true);
       
-      setIsGenerating(true);
+      if (recentHealthIssues.length === 0) {
+        toast({
+          title: "Info",
+          description: "No recent health issues found. Generating general health tip instead.",
+          variant: "default",
+        });
+      } else {
+        toast({
+          title: "Generating personalized tip",
+          description: "Creating a tip based on your recent health concerns...",
+          variant: "default",
+        });
+      }
       
       const contextData = {
         user_id: user?.id,
@@ -297,15 +336,23 @@ const HealthTips = () => {
           
         if (insertError) throw insertError;
         
-        toast.success('Personalized health tip created based on your health history!');
+        toast({
+          title: "Success",
+          description: "Personalized health tip created based on your health history!",
+          variant: "default",
+        });
       } else {
         throw new Error(data?.message || 'Failed to generate personalized tip');
       }
     } catch (error: any) {
       console.error('Error generating contextual tip:', error.message);
-      toast.error(`Failed to generate personalized tip: ${error.message}`);
+      toast({
+        title: "Error",
+        description: `Failed to generate personalized tip: ${error.message}`,
+        variant: "destructive",
+      });
     } finally {
-      setIsGenerating(false);
+      setIsGeneratingContextual(false);
     }
   };
 
@@ -343,10 +390,10 @@ const HealthTips = () => {
           <Button 
             variant="outline" 
             onClick={generateContextualTip} 
-            disabled={isGenerating}
+            disabled={isGeneratingContextual || isGeneratingGeneral}
             className="bg-gradient-to-r from-indigo-100 to-purple-100 hover:from-indigo-200 hover:to-purple-200"
           >
-            {isGenerating ? (
+            {isGeneratingContextual ? (
               <>
                 <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
                 Personalizing...
@@ -358,8 +405,12 @@ const HealthTips = () => {
               </>
             )}
           </Button>
-          <Button variant="outline" onClick={generateAITip} disabled={isGenerating}>
-            {isGenerating ? (
+          <Button 
+            variant="outline" 
+            onClick={generateAITip} 
+            disabled={isGeneratingGeneral || isGeneratingContextual}
+          >
+            {isGeneratingGeneral ? (
               <>
                 <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
                 Generating...

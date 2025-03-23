@@ -23,7 +23,16 @@ serve(async (req) => {
     }
 
     console.log("Received request to generate health tip");
-    const requestData = await req.json();
+    
+    // Parse request body and handle potential errors
+    let requestData;
+    try {
+      requestData = await req.json();
+    } catch (parseError) {
+      console.error("Failed to parse request body:", parseError);
+      throw new Error("Invalid request body format");
+    }
+    
     const { user_id, recentIssues } = requestData;
     
     if (!user_id) {
@@ -34,20 +43,20 @@ serve(async (req) => {
     console.log("Generating tip for user:", user_id);
     console.log("Recent health issues:", recentIssues ? JSON.stringify(recentIssues).substring(0, 100) + "..." : "Not available");
     
-    // Prepare prompt for generating a health tip based on type
+    // Determine if we should generate a contextual tip or general tip
+    const isContextual = Array.isArray(recentIssues) && recentIssues.length > 0;
     let prompt = "";
-    const isContextual = recentIssues && recentIssues.length > 0;
     
     if (isContextual) {
       // Create a personalized prompt based on the user's health issues
       prompt = `
         Generate a helpful health tip that would be relevant for someone with the following recent health concerns:
         
-        ${recentIssues.map((issue: string, index: number) => `${index + 1}. ${issue}`).join('\n')}
+        ${recentIssues.map((issue, index) => `${index + 1}. ${issue}`).join('\n')}
         
         The tip should be educational, evidence-based, and concise, and directly relevant to the health concerns listed.
         Include a short title (max 10 words) and a detailed explanation (50-100 words).
-        Format the response as a JSON object with 'title' and 'content' fields.
+        Format the response as a JSON object with 'title' and 'content' fields like this: {"title": "Your Title Here", "content": "Your content here"}
         The content should be informative, easy to understand, and actionable.
         Focus on practical preventive measures, symptom management, or lifestyle adjustments that can help with these specific health concerns.
       `;
@@ -58,7 +67,7 @@ serve(async (req) => {
         Generate a helpful health tip for general wellness. 
         The tip should be educational, evidence-based, and concise. 
         Include a short title (max 10 words) and a detailed explanation (50-100 words). 
-        Format the response as a JSON object with 'title' and 'content' fields.
+        Format the response as a JSON object with 'title' and 'content' fields like this: {"title": "Your Title Here", "content": "Your content here"}
         The content should be informative but easy to understand.
         Focus on practical advice that can be implemented in daily life.
         Include a preventive healthcare aspect or references to current seasonal health concerns if applicable.
@@ -67,7 +76,8 @@ serve(async (req) => {
     }
 
     console.log("Calling Gemini AI API");
-    // Call Gemini AI API
+
+    // Call Gemini AI API with better error handling
     const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
       method: "POST",
       headers: {
@@ -94,30 +104,78 @@ serve(async (req) => {
 
     const data = await response.json();
     console.log("Received response from Gemini API");
+    
+    if (!data.candidates || !data.candidates[0] || !data.candidates[0].content || !data.candidates[0].content.parts || !data.candidates[0].content.parts[0]) {
+      console.error("Unexpected Gemini API response format:", JSON.stringify(data));
+      throw new Error("Unexpected Gemini API response format");
+    }
+    
+    const generatedText = data.candidates[0].content.parts[0].text;
+    console.log("Generated text sample:", generatedText.substring(0, 100) + "...");
+    
     let tipContent;
     
     try {
-      // Parse the generated content to extract the JSON
-      const generatedText = data.candidates[0].content.parts[0].text;
-      console.log("Generated text sample:", generatedText.substring(0, 100) + "...");
+      // Multiple parsing strategies to extract JSON from the response
       
-      // Try to find and parse JSON directly
-      const jsonMatch = generatedText.match(/\{[\s\S]*\}/);
-      
+      // First strategy: Try to find JSON object pattern in the text
+      const jsonMatch = generatedText.match(/\{[\s\S]*?\}/);
       if (jsonMatch) {
-        tipContent = JSON.parse(jsonMatch[0]);
-        console.log("Successfully parsed JSON response");
-      } else {
-        // Fallback if JSON parsing fails
-        console.log("JSON parsing failed, using fallback method");
-        const lines = generatedText.split('\n').filter(line => line.trim());
-        tipContent = {
-          title: lines[0],
-          content: lines.slice(1).join('\n')
-        };
+        try {
+          tipContent = JSON.parse(jsonMatch[0]);
+          console.log("Successfully parsed JSON using pattern matching");
+        } catch (e) {
+          console.log("Failed to parse matched JSON pattern, trying other methods");
+        }
       }
+      
+      // Second strategy: Try to parse the entire response as JSON
+      if (!tipContent) {
+        try {
+          tipContent = JSON.parse(generatedText);
+          console.log("Successfully parsed entire response as JSON");
+        } catch (e) {
+          console.log("Failed to parse entire response as JSON, trying other methods");
+        }
+      }
+      
+      // Third strategy: Extract title and content using heuristics
+      if (!tipContent) {
+        console.log("Using heuristic parsing method");
+        const lines = generatedText.split('\n').filter(line => line.trim());
+        
+        // Look for title: content patterns
+        const titleMatch = generatedText.match(/["']?title["']?\s*[:=]\s*["']([^"']+)["']/i);
+        const contentMatch = generatedText.match(/["']?content["']?\s*[:=]\s*["']([^"']+)["']/i);
+        
+        if (titleMatch && contentMatch) {
+          tipContent = {
+            title: titleMatch[1],
+            content: contentMatch[1]
+          };
+          console.log("Successfully parsed using regex title/content extraction");
+        } else if (lines.length >= 2) {
+          // Fallback: Just use first line as title, rest as content
+          tipContent = {
+            title: lines[0].replace(/^["']+|["']+$/g, '').replace(/^title\s*[:=]\s*/i, ''),
+            content: lines.slice(1).join('\n').replace(/^["']+|["']+$/g, '').replace(/^content\s*[:=]\s*/i, '')
+          };
+          console.log("Used fallback parsing method");
+        }
+      }
+      
+      // Ensure we have valid content
+      if (!tipContent || !tipContent.title || !tipContent.content) {
+        throw new Error("Could not extract valid tip content");
+      }
+      
+      // Sanitize the content (remove any remaining quotes or JSON artifacts)
+      tipContent.title = tipContent.title.replace(/^["']+|["']+$/g, '');
+      tipContent.content = tipContent.content.replace(/^["']+|["']+$/g, '');
+      
     } catch (parseError) {
       console.error("Error parsing Gemini response:", parseError);
+      console.error("Raw response text:", generatedText);
       throw new Error("Failed to parse the generated health tip");
     }
 
@@ -138,7 +196,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: false,
-        message: error.message,
+        message: error.message || "Unknown error occurred",
       }),
       {
         status: 500,
