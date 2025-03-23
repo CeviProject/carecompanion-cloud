@@ -28,6 +28,21 @@ const PatientNavbar = () => {
     appointments: 0,
     medications: 0
   });
+  const [scrolled, setScrolled] = useState(false);
+
+  // Track scroll position to add background effect
+  useEffect(() => {
+    const handleScroll = () => {
+      if (window.scrollY > 10) {
+        setScrolled(true);
+      } else {
+        setScrolled(false);
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   const isActive = (path: string) => {
     return location.pathname === path;
@@ -111,14 +126,17 @@ const PatientNavbar = () => {
   ];
 
   return (
-    <div className="fixed inset-x-0 top-16 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header className={cn(
+      "fixed top-0 left-0 right-0 z-50 transition-all duration-300 ease-in-out",
+      scrolled || mobileMenuOpen ? "bg-background/95 backdrop-blur-md shadow-sm" : "bg-background/80 backdrop-blur-sm"
+    )}>
       {/* Mobile menu button */}
-      <div className="flex md:hidden justify-between items-center px-4 h-12 border-b">
-        <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
+      <div className="flex md:hidden justify-between items-center px-4 h-16 border-b">
+        <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="h-10 w-10 min-h-0">
           {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
         </Button>
-        <span className="font-medium text-sm">Patient Menu</span>
-        <SignOutButton variant="ghost" size="icon" showText={false} />
+        <span className="font-medium">Patient Dashboard</span>
+        <SignOutButton variant="ghost" size="icon" showText={false} className="h-10 w-10 min-h-0" />
       </div>
 
       {/* Mobile navigation */}
@@ -153,17 +171,24 @@ const PatientNavbar = () => {
       {/* Desktop navigation */}
       <div className="hidden md:block">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <nav className="flex items-center justify-between h-14">
-            <div className="flex items-center space-x-4 lg:space-x-6">
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center">
+              <Link to="/" className="flex items-center gap-2">
+                <span className="text-primary text-2xl font-semibold">
+                  Med-Guardian
+                </span>
+              </Link>
+            </div>
+            <nav className="flex items-center space-x-4 lg:space-x-6">
               {navItems.map((item) => (
                 <Link
                   key={item.path}
                   to={item.path}
                   className={cn(
-                    "flex items-center text-sm font-medium transition-colors hover:text-primary relative",
+                    "flex items-center text-sm font-medium transition-colors hover:text-primary relative px-3 py-2 rounded-full",
                     isActive(item.path) 
-                      ? "text-primary" 
-                      : "text-muted-foreground"
+                      ? "bg-primary text-primary-foreground" 
+                      : "text-muted-foreground hover:bg-primary/10"
                   )}
                 >
                   <item.icon className="h-4 w-4 mr-2" />
@@ -173,12 +198,12 @@ const PatientNavbar = () => {
                   ) : null}
                 </Link>
               ))}
-            </div>
+            </nav>
             <SignOutButton />
-          </nav>
+          </div>
         </div>
       </div>
-    </div>
+    </header>
   );
 };
 

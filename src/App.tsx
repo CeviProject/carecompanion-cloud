@@ -1,3 +1,4 @@
+
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -123,79 +124,86 @@ const PublicOnlyRoute = ({
 };
 
 // App with Auth provider wrapper
-const AppWithAuth = () => (
-  <AuthProvider>
-    <GoogleCalendarProvider>
-      <Routes>
-        <Route path="/" element={<Index />} />
-        <Route path="/about" element={<About />} />
-        <Route path="/features" element={<Features />} />
-        <Route path="/auth/login" element={
-          <PublicOnlyRoute>
-            <Login />
-          </PublicOnlyRoute>
-        } />
-        <Route path="/auth/register" element={
-          <PublicOnlyRoute>
-            <Register />
-          </PublicOnlyRoute>
-        } />
-        
-        {/* Legacy dashboard routes for compatibility */}
-        <Route path="/dashboard/patient" element={
-          <ProtectedRoute requiredRole="patient">
-            <Navigate to="/patient/overview" replace />
-          </ProtectedRoute>
-        } />
-        <Route path="/dashboard/doctor" element={
-          <ProtectedRoute requiredRole="doctor">
-            <DoctorDashboard />
-          </ProtectedRoute>
-        } />
-        
-        {/* New patient routes */}
-        <Route path="/patient/overview" element={
-          <ProtectedRoute requiredRole="patient">
-            <PatientOverview />
-          </ProtectedRoute>
-        } />
-        <Route path="/patient/appointments" element={
-          <ProtectedRoute requiredRole="patient">
-            <PatientAppointments />
-          </ProtectedRoute>
-        } />
-        <Route path="/patient/medications" element={
-          <ProtectedRoute requiredRole="patient">
-            <PatientMedications />
-          </ProtectedRoute>
-        } />
-        <Route path="/patient/health-query" element={
-          <ProtectedRoute requiredRole="patient">
-            <PatientHealthQuery />
-          </ProtectedRoute>
-        } />
-        <Route path="/patient/assessment" element={
-          <ProtectedRoute requiredRole="patient">
-            <PatientAssessment />
-          </ProtectedRoute>
-        } />
-        <Route path="/patient/health-tips" element={
-          <ProtectedRoute requiredRole="patient">
-            <PatientHealthTips />
-          </ProtectedRoute>
-        } />
-        <Route path="/patient/doctors" element={
-          <ProtectedRoute requiredRole="patient">
-            <PatientDoctors />
-          </ProtectedRoute>
-        } />
-        
-        {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-        <Route path="*" element={<NotFound />} />
-      </Routes>
-    </GoogleCalendarProvider>
-  </AuthProvider>
-);
+const AppWithAuth = () => {
+  const { isAuthenticated, profile } = useAuth();
+
+  // If authenticated, redirect patient to the overview page
+  useEffect(() => {
+    if (isAuthenticated && profile?.role === 'patient' && window.location.pathname === '/dashboard/patient') {
+      window.location.href = '/patient/overview';
+    }
+  }, [isAuthenticated, profile]);
+
+  return (
+    <Routes>
+      <Route path="/" element={<Index />} />
+      <Route path="/about" element={<About />} />
+      <Route path="/features" element={<Features />} />
+      <Route path="/auth/login" element={
+        <PublicOnlyRoute>
+          <Login />
+        </PublicOnlyRoute>
+      } />
+      <Route path="/auth/register" element={
+        <PublicOnlyRoute>
+          <Register />
+        </PublicOnlyRoute>
+      } />
+      
+      {/* Legacy dashboard routes for compatibility */}
+      <Route path="/dashboard/patient" element={
+        <ProtectedRoute requiredRole="patient">
+          <Navigate to="/patient/overview" replace />
+        </ProtectedRoute>
+      } />
+      <Route path="/dashboard/doctor" element={
+        <ProtectedRoute requiredRole="doctor">
+          <DoctorDashboard />
+        </ProtectedRoute>
+      } />
+      
+      {/* New patient routes */}
+      <Route path="/patient/overview" element={
+        <ProtectedRoute requiredRole="patient">
+          <PatientOverview />
+        </ProtectedRoute>
+      } />
+      <Route path="/patient/appointments" element={
+        <ProtectedRoute requiredRole="patient">
+          <PatientAppointments />
+        </ProtectedRoute>
+      } />
+      <Route path="/patient/medications" element={
+        <ProtectedRoute requiredRole="patient">
+          <PatientMedications />
+        </ProtectedRoute>
+      } />
+      <Route path="/patient/health-query" element={
+        <ProtectedRoute requiredRole="patient">
+          <PatientHealthQuery />
+        </ProtectedRoute>
+      } />
+      <Route path="/patient/assessment" element={
+        <ProtectedRoute requiredRole="patient">
+          <PatientAssessment />
+        </ProtectedRoute>
+      } />
+      <Route path="/patient/elderly-tips" element={
+        <ProtectedRoute requiredRole="patient">
+          <PatientHealthTips />
+        </ProtectedRoute>
+      } />
+      <Route path="/patient/doctors" element={
+        <ProtectedRoute requiredRole="patient">
+          <PatientDoctors />
+        </ProtectedRoute>
+      } />
+      
+      {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+      <Route path="*" element={<NotFound />} />
+    </Routes>
+  );
+};
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -203,7 +211,11 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <AppWithAuth />
+        <AuthProvider>
+          <GoogleCalendarProvider>
+            <AppWithAuth />
+          </GoogleCalendarProvider>
+        </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

@@ -77,7 +77,7 @@ const Index = () => {
                   <Button
                     onClick={handleGetStarted}
                     size="lg"
-                    className="rounded-full px-8 text-lg group"
+                    className="rounded-full px-8 text-lg group h-auto py-3"
                   >
                     Get Started
                     <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
@@ -86,7 +86,7 @@ const Index = () => {
                   <Button
                     onClick={navigateToDashboard}
                     size="lg"
-                    className="rounded-full px-8 text-lg group bg-primary text-primary-foreground"
+                    className="rounded-full px-8 text-lg group bg-primary text-primary-foreground h-auto py-3"
                   >
                     Go to Dashboard
                     <LayoutDashboard className="ml-2 h-5 w-5" />
@@ -95,7 +95,7 @@ const Index = () => {
                 <Button
                   variant="outline"
                   size="lg"
-                  className="rounded-full px-8 text-lg"
+                  className="rounded-full px-8 text-lg h-auto py-3"
                   asChild
                 >
                   <Link to="/features">Learn More</Link>
@@ -104,7 +104,7 @@ const Index = () => {
                   <Button
                     variant="secondary"
                     size="lg"
-                    className="rounded-full px-8 text-lg font-semibold bg-gradient-to-r from-green-100 to-green-200 hover:from-green-200 hover:to-green-300 text-green-800"
+                    className="rounded-full px-8 text-lg font-semibold bg-gradient-to-r from-green-100 to-green-200 hover:from-green-200 hover:to-green-300 text-green-800 h-auto py-3"
                     onClick={() => window.location.href = "https://eldercare-bot-assistant.lovable.app/"}
                   >
                     Try For Free
@@ -151,7 +151,7 @@ const Index = () => {
                 <Button
                   onClick={handleGetStarted}
                   size="lg"
-                  className="rounded-full px-8 text-lg"
+                  className="rounded-full px-8 text-lg h-auto py-3"
                 >
                   Get Started Today
                 </Button>
@@ -159,7 +159,7 @@ const Index = () => {
                 <Button
                   onClick={navigateToDashboard}
                   size="lg"
-                  className="rounded-full px-8 text-lg"
+                  className="rounded-full px-8 text-lg h-auto py-3"
                 >
                   Access Your Dashboard
                 </Button>

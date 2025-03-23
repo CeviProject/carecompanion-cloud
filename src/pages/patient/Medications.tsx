@@ -8,20 +8,22 @@ const PatientMedications = () => {
   return (
     <div className="min-h-screen bg-background">
       <PatientNavbar />
-      <div className="container mx-auto py-6 max-w-7xl pt-20">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold tracking-tight">Medications</h1>
-          <p className="text-muted-foreground">
-            Track and manage your medication schedule.
-          </p>
+      <main className="flex-grow pt-24">
+        <div className="container mx-auto py-6 px-4 sm:px-6 lg:px-8">
+          <div className="mb-6">
+            <h1 className="text-3xl font-bold tracking-tight">Medications</h1>
+            <p className="text-muted-foreground">
+              Track and manage your medication schedule.
+            </p>
+          </div>
+          
+          <Card className="border shadow-sm overflow-hidden">
+            <CardContent className="pt-6">
+              <MedicationReminders />
+            </CardContent>
+          </Card>
         </div>
-        
-        <Card className="shadow-md border-t-4 border-t-primary">
-          <CardContent className="pt-6">
-            <MedicationReminders />
-          </CardContent>
-        </Card>
-      </div>
+      </main>
     </div>
   );
 };
