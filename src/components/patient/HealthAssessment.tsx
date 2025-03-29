@@ -1,4 +1,3 @@
-
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Brain, Building, MapPin } from 'lucide-react';
@@ -7,6 +6,7 @@ interface Hospital {
   name: string;
   address: string;
   specialty: string;
+  distance?: number | string;
 }
 
 export interface HealthQuery {
@@ -36,16 +36,12 @@ const HealthAssessment = ({
 }: HealthAssessmentProps) => {
   if (!assessment && !minimalView) return null;
   
-  // Helper function to format the assessment text
   const formatAssessment = (text: string) => {
-    // Split by newlines and create paragraphs
     return text.split('\n').filter(line => line.trim() !== '').map((paragraph, index) => {
-      // Check if it's a heading (numbered list with a colon)
       if (/^\d+\..*:/.test(paragraph)) {
         return <h3 key={index} className="text-md font-medium mt-4 mb-2">{paragraph}</h3>;
       }
       
-      // Check if it's a bullet point (asterisk or dash)
       if (/^[\*\-]\s/.test(paragraph)) {
         return (
           <li key={index} className="ml-5 mb-2 text-sm">
@@ -54,7 +50,6 @@ const HealthAssessment = ({
         );
       }
       
-      // Regular paragraph
       return <p key={index} className="mb-3 text-sm">{paragraph}</p>;
     });
   };
@@ -69,6 +64,19 @@ const HealthAssessment = ({
     );
   }
   
+  let parsedAssessment = assessment;
+  if (assessment && typeof assessment === 'string' && assessment.startsWith('{') && assessment.endsWith('}')) {
+    try {
+      const parsed = JSON.parse(assessment);
+      if (parsed.assessment) {
+        parsedAssessment = parsed.assessment;
+      }
+    } catch (e) {
+      console.error("Failed to parse assessment JSON:", e);
+      parsedAssessment = assessment;
+    }
+  }
+  
   return (
     <Card className="glass-card p-6 space-y-4">
       <div>
@@ -80,9 +88,9 @@ const HealthAssessment = ({
           This assessment is for informational purposes only and not a medical diagnosis.
         </p>
         
-        {assessment && (
+        {parsedAssessment && (
           <div className="border-l-4 border-primary pl-4 py-2 overflow-auto max-h-[500px] pr-2">
-            {formatAssessment(assessment)}
+            {formatAssessment(parsedAssessment)}
           </div>
         )}
       </div>
@@ -117,6 +125,14 @@ const HealthAssessment = ({
                     {hospital.specialty && (
                       <p className="text-xs mt-1">
                         <span className="font-medium">Specialty:</span> {hospital.specialty}
+                      </p>
+                    )}
+                    {hospital.distance !== undefined && (
+                      <p className="text-xs mt-1">
+                        <span className="font-medium">Distance:</span>{' '}
+                        {typeof hospital.distance === 'number' 
+                          ? `${hospital.distance.toFixed(1)} km` 
+                          : hospital.distance}
                       </p>
                     )}
                   </div>
