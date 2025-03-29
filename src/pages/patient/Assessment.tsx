@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from "@/components/ui/button";
@@ -20,15 +20,20 @@ const Assessment = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('latest');
   const [dataFetched, setDataFetched] = useState(false);
+  const fetchInProgress = useRef(false);
 
   useEffect(() => {
-    if (user && !dataFetched) {
+    if (user && !dataFetched && !fetchInProgress.current) {
       fetchHealthQueries();
     }
   }, [user, dataFetched]);
 
   const fetchHealthQueries = async () => {
     try {
+      // Prevent multiple simultaneous fetch requests
+      if (fetchInProgress.current) return;
+      fetchInProgress.current = true;
+      
       setIsLoading(true);
       
       const { data, error } = await supabase
@@ -58,6 +63,7 @@ const Assessment = () => {
       console.error('Error in fetchHealthQueries:', error);
     } finally {
       setIsLoading(false);
+      fetchInProgress.current = false;
     }
   };
 
