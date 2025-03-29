@@ -1,216 +1,269 @@
 
-import { createContext, useContext, useEffect, useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
-import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from '@/components/ui/use-toast';
 
-interface GoogleCalendarContextType {
-  isConnected: boolean;
+export interface GoogleCalendarContextType {
+  isEnabled: boolean;
+  isAuthorizing: boolean;
   isLoading: boolean;
-  connect: () => Promise<void>;
-  disconnect: () => Promise<void>;
-  addEventToCalendar: (event: {
+  authorizeGoogleCalendar: () => Promise<void>;
+  getAccessToken: () => Promise<string | null>;
+  addEvent: (eventDetails: {
     summary: string;
-    description: string;
-    startTime: string;
-    endTime: string;
-  }) => Promise<any>;
+    description?: string;
+    location?: string;
+    start: Date;
+    end: Date;
+    attendees?: { email: string }[];
+    reminders?: { method: string; minutes: number }[];
+  }) => Promise<boolean>;
 }
 
 const GoogleCalendarContext = createContext<GoogleCalendarContextType>({
-  isConnected: false,
-  isLoading: false,
-  connect: async () => { console.error("GoogleCalendarProvider not initialized") },
-  disconnect: async () => { console.error("GoogleCalendarProvider not initialized") },
-  addEventToCalendar: async () => { console.error("GoogleCalendarProvider not initialized") }
+  isEnabled: false,
+  isAuthorizing: false,
+  isLoading: true,
+  authorizeGoogleCalendar: async () => {},
+  getAccessToken: async () => null,
+  addEvent: async () => false,
 });
 
-export const GoogleCalendarProvider = ({ children }: { children: React.ReactNode }) => {
+export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
-  const [isConnected, setIsConnected] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [fetchAttempted, setFetchAttempted] = useState(false);
-  
-  useEffect(() => {
-    console.log('GoogleCalendarProvider mounted');
+  const [isEnabled, setIsEnabled] = useState(false);
+  const [isAuthorizing, setIsAuthorizing] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [hasAttemptedFetch, setHasAttemptedFetch] = useState(false);
+
+  const fetchGoogleCalendarToken = async () => {
+    if (!user || hasAttemptedFetch) return;
     
-    return () => {
-      console.log('GoogleCalendarProvider unmounting');
-    };
-  }, []);
-  
-  useEffect(() => {
-    if (user && !fetchAttempted) {
-      checkTokens();
-    }
-    
-    return () => {
-      // Clean up code if needed
-    };
-  }, [user]);
-  
-  const checkTokens = async () => {
-    if (!user) return;
+    setHasAttemptedFetch(true);
+    setIsLoading(true);
     
     try {
-      setIsLoading(true);
-      setFetchAttempted(true);
-      console.log('Fetching tokens from database for user:', user.id);
-      
-      const { data, error } = await supabase.functions.invoke('google-calendar-event', {
-        body: { 
-          action: 'get_tokens',
-          userId: user.id
-        }
-      });
-      
-      console.log('Tokens response from database:', data);
+      console.log('Fetching Google Calendar token for user:', user.id);
+      const { data, error } = await supabase
+        .from('user_integrations')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('provider', 'google_calendar')
+        .single();
       
       if (error) {
-        console.error('Error fetching tokens:', error);
+        if (error.code !== 'PGRST116') { // Not found error code
+          console.error('Error fetching Google Calendar integration:', error);
+        }
+        setIsEnabled(false);
+        setAccessToken(null);
         return;
       }
       
-      if (data && data.found) {
-        setIsConnected(true);
+      if (data) {
+        console.log('Google Calendar integration found');
+        setIsEnabled(true);
+        setAccessToken(data.access_token);
+        
+        // Check if token needs refresh
+        const expiresAt = new Date(data.expires_at);
+        const now = new Date();
+        const expiresInMs = expiresAt.getTime() - now.getTime();
+        
+        if (expiresInMs < 300000) { // Less than 5 minutes remaining
+          console.log('Token expiring soon, refreshing...');
+          await refreshToken();
+        }
       } else {
-        console.log('No Google Calendar tokens found for this user');
-        setIsConnected(false);
+        setIsEnabled(false);
+        setAccessToken(null);
       }
     } catch (error) {
-      console.error('Error checking tokens:', error);
+      console.error('Error in fetchGoogleCalendarToken:', error);
+      setIsEnabled(false);
+      setAccessToken(null);
     } finally {
       setIsLoading(false);
     }
   };
-  
-  const connect = async () => {
-    if (!user) {
-      toast.error('You must be logged in to connect Google Calendar');
-      return;
-    }
+
+  const refreshToken = async () => {
+    if (!user) return;
     
     try {
-      setIsLoading(true);
+      const { data, error } = await supabase
+        .from('user_integrations')
+        .select('refresh_token')
+        .eq('user_id', user.id)
+        .eq('provider', 'google_calendar')
+        .single();
       
-      const { data, error } = await supabase.functions.invoke('google-calendar-event', {
-        body: { 
-          action: 'authorize',
-          userId: user.id
-        }
-      });
-      
-      if (error) throw error;
-      
-      if (data?.authUrl) {
-        window.location.href = data.authUrl;
-      } else {
-        throw new Error('Failed to get authorization URL');
+      if (error || !data?.refresh_token) {
+        throw new Error('Refresh token not found');
       }
-    } catch (error: any) {
-      console.error('Error starting Google Calendar authorization:', error);
-      toast.error(error.message || 'Failed to start Google Calendar authorization');
-    } finally {
-      setIsLoading(false);
+      
+      const response = await fetch('/api/google-calendar/refresh-token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          refresh_token: data.refresh_token,
+          user_id: user.id
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to refresh token');
+      }
+      
+      const result = await response.json();
+      setAccessToken(result.access_token);
+      
+    } catch (error) {
+      console.error('Error refreshing token:', error);
+      setIsEnabled(false);
+      setAccessToken(null);
     }
   };
-  
-  const disconnect = async () => {
+
+  const authorizeGoogleCalendar = async () => {
     if (!user) {
-      toast.error('You must be logged in to disconnect Google Calendar');
+      toast({
+        title: "Authentication required",
+        description: "Please sign in to connect Google Calendar",
+        variant: "destructive"
+      });
       return;
     }
     
+    setIsAuthorizing(true);
+    
     try {
-      setIsLoading(true);
+      // Generate a random state value for security
+      const state = Math.random().toString(36).substring(2, 15);
       
-      const { data, error } = await supabase.functions.invoke('google-calendar-event', {
-        body: { 
-          action: 'revoke',
-          userId: user.id
-        }
+      // Store the state in localStorage to verify on callback
+      localStorage.setItem('googleAuthState', state);
+      
+      // Create the OAuth URL
+      const redirectUri = `${window.location.origin}/auth/google/callback`;
+      const scope = encodeURIComponent('https://www.googleapis.com/auth/calendar');
+      
+      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+        `client_id=${process.env.VITE_GOOGLE_CLIENT_ID}` +
+        `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+        `&response_type=code` +
+        `&scope=${scope}` +
+        `&access_type=offline` +
+        `&prompt=consent` +
+        `&state=${state}`;
+      
+      // Redirect the user to the Google authorization page
+      window.location.href = authUrl;
+      
+    } catch (error) {
+      console.error('Error initiating Google Calendar authorization:', error);
+      toast({
+        title: "Connection Error",
+        description: "Failed to connect to Google Calendar",
+        variant: "destructive"
       });
-      
-      if (error) throw error;
-      
-      setIsConnected(false);
-      toast.success('Google Calendar disconnected successfully');
-    } catch (error: any) {
-      console.error('Error disconnecting Google Calendar:', error);
-      toast.error(error.message || 'Failed to disconnect Google Calendar');
     } finally {
-      setIsLoading(false);
+      setIsAuthorizing(false);
     }
   };
-  
-  const addEventToCalendar = async (event: {
+
+  const getAccessToken = async (): Promise<string | null> => {
+    if (accessToken) return accessToken;
+    
+    // Try to fetch a fresh token
+    if (user && !isLoading && !hasAttemptedFetch) {
+      await fetchGoogleCalendarToken();
+    }
+    
+    return accessToken;
+  };
+
+  const addEvent = async (eventDetails: {
     summary: string;
-    description: string;
-    startTime: string;
-    endTime: string;
-  }) => {
-    if (!user) {
-      toast.error('You must be logged in to add events to Google Calendar');
-      return;
-    }
-    
+    description?: string;
+    location?: string;
+    start: Date;
+    end: Date;
+    attendees?: { email: string }[];
+    reminders?: { method: string; minutes: number }[];
+  }): Promise<boolean> => {
     try {
-      setIsLoading(true);
+      const token = await getAccessToken();
       
-      // First get tokens
-      const { data: tokens, error: tokensError } = await supabase.functions.invoke('google-calendar-event', {
-        body: { 
-          action: 'get_tokens',
-          userId: user.id
-        }
-      });
-      
-      if (tokensError) throw tokensError;
-      
-      if (!tokens || !tokens.found || !tokens.access_token) {
-        throw new Error('You need to connect Google Calendar first');
+      if (!token) {
+        toast({
+          title: "Not Connected",
+          description: "Please connect your Google Calendar first",
+          variant: "destructive"
+        });
+        return false;
       }
       
-      // Then create event
-      const { data, error } = await supabase.functions.invoke('google-calendar-event', {
-        body: { 
-          action: 'create',
-          accessToken: tokens.access_token,
-          event
-        }
+      // Call our edge function to create the event
+      const response = await fetch('/api/google-calendar-event', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(eventDetails)
       });
       
-      if (error) throw error;
+      if (!response.ok) {
+        throw new Error(`Failed to add event: ${response.statusText}`);
+      }
       
-      toast.success('Event added to Google Calendar');
-      return data;
-    } catch (error: any) {
+      toast({
+        title: "Event Added",
+        description: "Successfully added to your Google Calendar",
+      });
+      
+      return true;
+      
+    } catch (error) {
       console.error('Error adding event to Google Calendar:', error);
-      toast.error(error.message || 'Failed to add event to Google Calendar');
-    } finally {
-      setIsLoading(false);
+      toast({
+        title: "Failed to Add Event",
+        description: "Could not add the event to your Google Calendar",
+        variant: "destructive"
+      });
+      return false;
     }
   };
-  
-  const value = {
-    isConnected,
+
+  useEffect(() => {
+    if (user) {
+      fetchGoogleCalendarToken();
+    } else {
+      setIsEnabled(false);
+      setAccessToken(null);
+      setIsLoading(false);
+    }
+  }, [user]);
+
+  const contextValue: GoogleCalendarContextType = {
+    isEnabled,
+    isAuthorizing,
     isLoading,
-    connect,
-    disconnect,
-    addEventToCalendar
+    authorizeGoogleCalendar,
+    getAccessToken,
+    addEvent
   };
-  
+
   return (
-    <GoogleCalendarContext.Provider value={value}>
+    <GoogleCalendarContext.Provider value={contextValue}>
       {children}
     </GoogleCalendarContext.Provider>
   );
 };
 
-export const useGoogleCalendar = () => {
-  const context = useContext(GoogleCalendarContext);
-  if (context === undefined) {
-    throw new Error('useGoogleCalendar must be used within a GoogleCalendarProvider');
-  }
-  return context;
-};
+export const useGoogleCalendar = () => useContext(GoogleCalendarContext);

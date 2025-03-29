@@ -1,3 +1,4 @@
+
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -15,6 +16,15 @@ import { Skeleton } from "./components/ui/skeleton";
 import About from "./pages/About";
 import Features from "./pages/Features";
 import { useEffect } from "react";
+
+// Import all patient pages
+import PatientOverview from "./pages/patient/Overview";
+import PatientAppointments from "./pages/patient/Appointments";
+import PatientMedications from "./pages/patient/Medications";
+import PatientHealthQuery from "./pages/patient/HealthQuery";
+import PatientAssessment from "./pages/patient/Assessment";
+import PatientHealthTips from "./pages/patient/HealthTips";
+import PatientDoctors from "./pages/patient/Doctors";
 
 const queryClient = new QueryClient({
   defaultOptions: {
