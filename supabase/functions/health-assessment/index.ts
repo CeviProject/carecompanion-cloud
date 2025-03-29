@@ -1,3 +1,4 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
@@ -70,7 +71,7 @@ Please include:
 5. Recommended hospitals or clinics near ${patientData?.location || 'the patient'}:
    • List 3 recommended medical facilities with their specialties and approximate addresses
 
-Format your response in a helpful, clear manner that is informative but not alarming. Use bullet points where appropriate.
+Format your response in a helpful, clear manner that is informative but not alarming. Use bold formatting for section headers and bullet points for lists to improve readability.
 `;
 
     console.log('Making request to Gemini API with prompt length:', prompt.length);
