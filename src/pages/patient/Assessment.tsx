@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -11,6 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import { Calendar, Clock, FileText, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
+import ElderlyHealthTips from '@/components/patient/ElderlyHealthTips';
 
 const Assessment = () => {
   const { user } = useAuth();
@@ -39,13 +39,28 @@ const Assessment = () => {
       if (error) {
         console.error('Error fetching health queries:', error);
         toast.error('Failed to fetch your health assessments');
-        throw error;
+        return;
       }
 
       if (data && data.length > 0) {
         console.log('Fetched health queries:', data);
-        setLatestQuery(data[0] as HealthQuery);
-        setPastQueries(data.slice(1) as HealthQuery[]);
+        
+        const processedData = data.map(query => {
+          let processedQuery = {...query};
+          
+          if (typeof query.ai_assessment === 'string') {
+            try {
+              processedQuery.ai_assessment = JSON.parse(query.ai_assessment);
+            } catch (e) {
+              console.log('Error parsing assessment JSON:', e);
+            }
+          }
+          
+          return processedQuery as HealthQuery;
+        });
+        
+        setLatestQuery(processedData[0]);
+        setPastQueries(processedData.slice(1));
       } else {
         console.log('No health queries found');
         setLatestQuery(null);
@@ -102,10 +117,14 @@ const Assessment = () => {
                 </CardContent>
               </Card>
             ) : latestQuery ? (
-              <HealthAssessment 
-                assessment={latestQuery.ai_assessment} 
-                queryData={latestQuery} 
-              />
+              <div className="space-y-6">
+                <HealthAssessment 
+                  assessment={latestQuery.ai_assessment} 
+                  queryData={latestQuery} 
+                />
+                
+                <ElderlyHealthTips />
+              </div>
             ) : (
               <Card>
                 <CardContent className="flex flex-col items-center justify-center py-10 space-y-4">
