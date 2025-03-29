@@ -10,6 +10,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Calendar, Clock, FileText, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
+import { toast } from 'sonner';
 
 const Assessment = () => {
   const { user } = useAuth();
@@ -28,20 +29,30 @@ const Assessment = () => {
   const fetchHealthQueries = async () => {
     try {
       setIsLoading(true);
+      
       const { data, error } = await supabase
         .from('health_queries')
         .select('*')
         .eq('patient_id', user?.id)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching health queries:', error);
+        toast.error('Failed to fetch your health assessments');
+        throw error;
+      }
 
       if (data && data.length > 0) {
+        console.log('Fetched health queries:', data);
         setLatestQuery(data[0] as HealthQuery);
         setPastQueries(data.slice(1) as HealthQuery[]);
+      } else {
+        console.log('No health queries found');
+        setLatestQuery(null);
+        setPastQueries([]);
       }
     } catch (error: any) {
-      console.error('Error fetching health queries:', error);
+      console.error('Error in fetchHealthQueries:', error);
     } finally {
       setIsLoading(false);
     }
@@ -91,7 +102,10 @@ const Assessment = () => {
                 </CardContent>
               </Card>
             ) : latestQuery ? (
-              <HealthAssessment assessment={latestQuery.ai_assessment} queryData={latestQuery} />
+              <HealthAssessment 
+                assessment={latestQuery.ai_assessment} 
+                queryData={latestQuery} 
+              />
             ) : (
               <Card>
                 <CardContent className="flex flex-col items-center justify-center py-10 space-y-4">

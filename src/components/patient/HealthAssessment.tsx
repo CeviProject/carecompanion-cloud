@@ -47,21 +47,24 @@ const HealthAssessment = ({
     );
   }
   
+  // Try to parse JSON if assessment is in JSON format
   let parsedAssessment = assessment;
-  if (assessment && typeof assessment === 'string' && assessment.startsWith('{') && assessment.endsWith('}')) {
-    try {
+  try {
+    if (assessment && typeof assessment === 'string' && assessment.startsWith('{') && assessment.endsWith('}')) {
       const parsed = JSON.parse(assessment);
       if (parsed.assessment) {
         parsedAssessment = parsed.assessment;
       }
-    } catch (e) {
-      console.error("Failed to parse assessment JSON:", e);
-      parsedAssessment = assessment;
     }
+  } catch (e) {
+    console.error("Failed to parse assessment JSON:", e);
+    parsedAssessment = assessment;
   }
   
   // Clean text from markdown characters
   const cleanMarkdown = (text: string): string => {
+    if (!text) return '';
+    
     return text
       .replace(/\*\*/g, '') // Remove double asterisks (bold)
       .replace(/\*/g, '')   // Remove single asterisks (italic)
@@ -113,7 +116,9 @@ const HealthAssessment = ({
   const formatSection = (text: string): JSX.Element[] => {
     if (!text) return [<p key="empty" className="text-sm italic">No information available</p>];
     
-    return text.split('\n').filter(line => line.trim() !== '').map((paragraph, index) => {
+    const lines = text.split('\n').filter(line => line.trim() !== '');
+    
+    return lines.map((paragraph, index) => {
       const cleanedText = cleanMarkdown(paragraph);
       
       // If it's a header with a colon
