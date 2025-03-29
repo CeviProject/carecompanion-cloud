@@ -106,7 +106,7 @@ const PatientNavbar = () => {
     { label: 'Medications', path: '/patient/medications', icon: Pill, count: notifications.medications },
     { label: 'Health Assistant', path: '/patient/health-query', icon: Search },
     { label: 'Assessment', path: '/patient/assessment', icon: ActivitySquare },
-    { label: 'Elderly Tips', path: '/patient/elderly-tips', icon: Heart },
+    { label: 'Health Tips', path: '/patient/health-tips', icon: Heart },
     { label: 'Find Doctors', path: '/patient/doctors', icon: UserRound },
   ];
 

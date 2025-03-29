@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -91,13 +92,15 @@ const HealthQueryForm = ({ onQuerySubmitted }: HealthQueryFormProps) => {
         throw new Error(aiData.error);
       }
       
+      console.log('Full AI response data:', aiData);
+      
       console.log('Saving health query to database');
       const { data: queryData, error: queryError } = await supabase
         .from('health_queries')
         .insert({
           patient_id: user.id,
           query_text: values.queryText,
-          ai_assessment: aiData.assessment,
+          ai_assessment: aiData.assessment || JSON.stringify(aiData),
           patient_data: patientData
         })
         .select()
@@ -108,16 +111,20 @@ const HealthQueryForm = ({ onQuerySubmitted }: HealthQueryFormProps) => {
         throw queryError;
       }
       
-      console.log('Health query saved successfully');
+      console.log('Health query saved successfully:', queryData);
       toast.success('Your health query has been analyzed');
       form.reset();
       
       if (onQuerySubmitted) {
-        onQuerySubmitted({
+        // Process data before returning to make sure we have consistent structure
+        const processedData = {
           ...queryData,
-          suggestedSpecialties: aiData.suggestedSpecialties,
-          recommendedHospitals: aiData.recommendedHospitals
-        });
+          suggestedSpecialties: aiData.suggestedDepartments || aiData.suggestedSpecialties || [],
+          recommendedHospitals: aiData.hospitals || aiData.recommendedHospitals || []
+        };
+        
+        console.log('Returning processed data to parent component:', processedData);
+        onQuerySubmitted(processedData);
       }
     } catch (error: any) {
       console.error('Error submitting health query:', error);
