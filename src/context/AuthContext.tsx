@@ -34,7 +34,16 @@ interface AuthContextType {
   isAuthenticated: boolean;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+// Create context with default values
+const AuthContext = createContext<AuthContextType>({
+  user: null,
+  profile: null,
+  signUp: async () => { console.error("AuthProvider not initialized") },
+  signIn: async () => { console.error("AuthProvider not initialized") },
+  signOut: async () => { console.error("AuthProvider not initialized") },
+  loading: true,
+  isAuthenticated: false
+});
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -84,11 +93,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           setUser(session.user);
           setIsAuthenticated(true);
           await fetchProfile(session.user.id);
+        } else {
+          // Explicitly set loading to false if no session
+          setLoading(false);
         }
       } catch (error) {
         console.error('Error checking auth session:', error);
-      } finally {
-        // Always set loading to false after initial check
+        // Make sure to set loading to false on error too
         setLoading(false);
       }
     };
@@ -229,8 +240,5 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
   return context;
 };
