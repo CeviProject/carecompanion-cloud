@@ -19,29 +19,23 @@ const SignOutButton = ({
   showIcon = true,
   showText = true
 }: SignOutButtonProps) => {
-  try {
-    const { signOut, isAuthenticated } = useAuth();
+  const { signOut, isAuthenticated } = useAuth();
 
-    if (!isAuthenticated) {
-      return null;
-    }
-
-    return (
-      <Button 
-        variant={variant} 
-        size={size} 
-        className={className} 
-        onClick={signOut}
-      >
-        {showIcon && <LogOut className="h-4 w-4 mr-2" />}
-        {showText && "Sign Out"}
-      </Button>
-    );
-  } catch (error) {
-    // If useAuth fails, render nothing or a fallback
-    console.error("Error in SignOutButton:", error);
+  if (!isAuthenticated) {
     return null;
   }
+
+  return (
+    <Button 
+      variant={variant} 
+      size={size} 
+      className={className} 
+      onClick={signOut}
+    >
+      {showIcon && <LogOut className="h-4 w-4 mr-2" />}
+      {showText && "Sign Out"}
+    </Button>
+  );
 };
 
 export default SignOutButton;

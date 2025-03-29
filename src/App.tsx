@@ -1,4 +1,3 @@
-
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -17,7 +16,7 @@ import About from "./pages/About";
 import Features from "./pages/Features";
 import { useEffect } from "react";
 
-// Import all patient pages
+// Patient pages
 import PatientOverview from "./pages/patient/Overview";
 import PatientAppointments from "./pages/patient/Appointments";
 import PatientMedications from "./pages/patient/Medications";
@@ -35,6 +34,7 @@ const queryClient = new QueryClient({
   },
 });
 
+// Protected route component with location-aware redirection
 const ProtectedRoute = ({ 
   children, 
   requiredRole 
@@ -79,6 +79,7 @@ const ProtectedRoute = ({
   return <>{children}</>;
 };
 
+// Public only route (not accessible when logged in)
 const PublicOnlyRoute = ({ 
   children, 
   redirectTo 
@@ -121,6 +122,7 @@ const PublicOnlyRoute = ({
   return <>{children}</>;
 };
 
+// App with Auth provider wrapper
 const AppWithAuth = () => (
   <AuthProvider>
     <GoogleCalendarProvider>
@@ -139,6 +141,7 @@ const AppWithAuth = () => (
           </PublicOnlyRoute>
         } />
         
+        {/* Legacy dashboard routes for compatibility */}
         <Route path="/dashboard/patient" element={
           <ProtectedRoute requiredRole="patient">
             <Navigate to="/patient/overview" replace />
@@ -150,6 +153,7 @@ const AppWithAuth = () => (
           </ProtectedRoute>
         } />
         
+        {/* New patient routes */}
         <Route path="/patient/overview" element={
           <ProtectedRoute requiredRole="patient">
             <PatientOverview />
@@ -186,6 +190,7 @@ const AppWithAuth = () => (
           </ProtectedRoute>
         } />
         
+        {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
         <Route path="*" element={<NotFound />} />
       </Routes>
     </GoogleCalendarProvider>
@@ -193,15 +198,15 @@ const AppWithAuth = () => (
 );
 
 const App = () => (
-  <BrowserRouter>
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
+  <QueryClientProvider client={queryClient}>
+    <TooltipProvider>
+      <Toaster />
+      <Sonner />
+      <BrowserRouter>
         <AppWithAuth />
-      </TooltipProvider>
-    </QueryClientProvider>
-  </BrowserRouter>
+      </BrowserRouter>
+    </TooltipProvider>
+  </QueryClientProvider>
 );
 
 export default App;

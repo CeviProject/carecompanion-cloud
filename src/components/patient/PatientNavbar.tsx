@@ -110,16 +110,6 @@ const PatientNavbar = () => {
     { label: 'Find Doctors', path: '/patient/doctors', icon: UserRound },
   ];
 
-  // Safe rendering to ensure we only use SignOutButton when auth context is available
-  const renderSignOutButton = (props = {}) => {
-    try {
-      return <SignOutButton {...props} />;
-    } catch (error) {
-      console.error("Auth context not available for SignOutButton:", error);
-      return <Button variant="ghost" size="icon" onClick={() => console.log("Auth not initialized yet")} {...props}><LogOut className="h-4 w-4" /></Button>;
-    }
-  };
-
   return (
     <div className="fixed top-0 left-0 right-0 z-50 border-b bg-background shadow-sm">
       {/* Mobile menu button */}
@@ -128,7 +118,7 @@ const PatientNavbar = () => {
           {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
         </Button>
         <span className="font-medium text-lg">Patient Menu</span>
-        {renderSignOutButton({ variant: "ghost", size: "icon", showText: false })}
+        <SignOutButton variant="ghost" size="icon" showText={false} />
       </div>
 
       {/* Mobile navigation */}
@@ -184,7 +174,7 @@ const PatientNavbar = () => {
                 </Link>
               ))}
             </div>
-            {renderSignOutButton({ className: "text-lg" })}
+            <SignOutButton className="text-lg" />
           </nav>
         </div>
       </div>
