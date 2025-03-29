@@ -66,6 +66,10 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
   const [appointments, setAppointments] = useState<any[]>([]);
   const [isGoogleAuthDialogOpen, setIsGoogleAuthDialogOpen] = useState(false);
   const [googleAuthUrl, setGoogleAuthUrl] = useState('');
+  const [googleCalendarEnabled, setGoogleCalendarEnabled] = useState(() => 
+    localStorage.getItem('googleCalendarEnabled') === 'true'
+  );
+  const [tokenFetchAttempted, setTokenFetchAttempted] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -79,7 +83,11 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
     
     if (user) {
       fetchUserAppointments();
-      checkGoogleCalendarAuth();
+      
+      if (!tokenFetchAttempted) {
+        checkGoogleCalendarAuth();
+        setTokenFetchAttempted(true);
+      }
       
       const channel = supabase
         .channel('appointments-changes')
@@ -126,20 +134,37 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
   }, [user]);
 
   const checkGoogleCalendarAuth = () => {
+    if (!user) return;
+    
+    if (localStorage.getItem('googleCalendarEnabled') !== 'true') {
+      setGoogleCalendarEnabled(false);
+      return;
+    }
+    
     const tokens = getGoogleCalendarTokens();
     
     if (tokens?.access_token && tokens?.expires_at) {
       const now = Date.now();
       const expiresAt = tokens.expires_at;
       
+      setGoogleCalendarEnabled(true);
+      
       if (now >= expiresAt) {
         if (tokens.refresh_token) {
-          refreshGoogleToken(tokens.refresh_token);
+          refreshGoogleToken(tokens.refresh_token).catch(() => {
+            localStorage.removeItem('googleCalendarTokens');
+            localStorage.setItem('googleCalendarEnabled', 'false');
+            setGoogleCalendarEnabled(false);
+          });
         } else {
           localStorage.removeItem('googleCalendarTokens');
           localStorage.setItem('googleCalendarEnabled', 'false');
+          setGoogleCalendarEnabled(false);
         }
       }
+    } else {
+      localStorage.setItem('googleCalendarEnabled', 'false');
+      setGoogleCalendarEnabled(false);
     }
   };
 
@@ -196,10 +221,18 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
   };
 
   const handleGoogleAuthorize = async () => {
+    if (!user) {
+      toast.error('You must be logged in to connect Google Calendar');
+      return;
+    }
+    
     try {
       console.log('Requesting Google authorization URL');
       const response = await supabase.functions.invoke('google-calendar-event', {
-        body: { action: 'authorize' }
+        body: { 
+          action: 'authorize',
+          userId: user.id
+        }
       });
       
       if (response.error) {
@@ -377,7 +410,7 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
       toast.success('Appointment booked successfully!');
       form.reset();
       
-      const isGoogleCalendarEnabled = localStorage.getItem('googleCalendarEnabled') === 'true';
+      const isGoogleCalendarEnabled = googleCalendarEnabled;
       if (isGoogleCalendarEnabled) {
         const tokens = getGoogleCalendarTokens();
         if (tokens?.access_token) {
@@ -771,13 +804,9 @@ const AppointmentBooking = ({ onAppointmentCreated }: AppointmentBookingProps) =
 };
 
 const GoogleCalendarToggle = ({ onAuthorize }: { onAuthorize: () => void }) => {
-  const [enabled, setEnabled] = useState(() => 
-    localStorage.getItem('googleCalendarEnabled') === 'true'
-  );
-  
   const toggleCalendar = () => {
-    const newState = !enabled;
-    setEnabled(newState);
+    const newState = !googleCalendarEnabled;
+    setGoogleCalendarEnabled(newState);
     localStorage.setItem('googleCalendarEnabled', String(newState));
     
     if (newState) {
@@ -793,9 +822,9 @@ const GoogleCalendarToggle = ({ onAuthorize }: { onAuthorize: () => void }) => {
       variant="outline" 
       type="button"
       onClick={toggleCalendar}
-      className={enabled ? "bg-green-50" : ""}
+      className={googleCalendarEnabled ? "bg-green-50" : ""}
     >
-      {enabled ? "Calendar On" : "Calendar Off"}
+      {googleCalendarEnabled ? "Calendar On" : "Calendar Off"}
     </Button>
   );
 };

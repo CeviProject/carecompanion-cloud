@@ -66,6 +66,7 @@ const AuthProviderInternal = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     console.log('AuthProvider mounted, setting up auth state listener');
+    let isInitializing = true;
     
     // First check for existing session
     console.log('Checking for existing session');
@@ -88,7 +89,7 @@ const AuthProviderInternal = ({ children }: { children: React.ReactNode }) => {
         }
         
         // Only set loading to false after both authentication and profile check
-        if (event === 'SIGNED_OUT') {
+        if (event === 'SIGNED_OUT' || !isInitializing) {
           setLoading(false);
         }
       }
@@ -103,14 +104,16 @@ const AuthProviderInternal = ({ children }: { children: React.ReactNode }) => {
           setUser(session.user);
           setIsAuthenticated(true);
           await fetchProfile(session.user.id);
-        } else {
-          // Explicitly set loading to false if no session
-          setLoading(false);
         }
+        
+        // Always set loading to false after initialization is complete
+        setLoading(false);
+        isInitializing = false;
       } catch (error) {
         console.error('Error checking auth session:', error);
         // Make sure to set loading to false on error too
         setLoading(false);
+        isInitializing = false;
       }
     };
     

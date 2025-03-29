@@ -302,102 +302,124 @@ serve(async (req) => {
         
         // Check if the user_integrations table exists
         try {
-          // Get tokens from the database
-          const { data: integrationData, error: integrationError } = await supabase
-            .from('user_integrations')
-            .select('*')
-            .match({ user_id: userId, provider: 'google_calendar' })
-            .single();
-          
-          if (integrationError) {
-            console.error('Error fetching tokens from database:', integrationError);
-            // Return empty tokens if not found
+          // Try to get tokens from the database
+          try {
+            const { data: integrationData, error: integrationError } = await supabase
+              .from('user_integrations')
+              .select('*')
+              .match({ user_id: userId, provider: 'google_calendar' })
+              .single();
+            
+            if (integrationError) {
+              // Check if this is a "table does not exist" error
+              if (integrationError.code === '42P01') {
+                console.log('The user_integrations table does not exist yet');
+                return new Response(JSON.stringify({
+                  message: 'No Google Calendar integration found for this user',
+                  found: false
+                }), {
+                  headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                });
+              } else {
+                console.error('Error fetching tokens from database:', integrationError);
+                // Return empty tokens if not found
+                return new Response(JSON.stringify({
+                  message: 'No Google Calendar integration found for this user',
+                  found: false
+                }), {
+                  headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                });
+              }
+            }
+            
+            console.log('Tokens fetched from database for user:', userId);
+            
+            // Check if tokens are expired
+            const expiresAt = new Date(integrationData.expires_at).getTime();
+            const now = Date.now();
+            
+            if (now >= expiresAt) {
+              console.log('Access token expired, refreshing...');
+              
+              // Refresh token
+              const refreshResponse = await fetch('https://oauth2.googleapis.com/token', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                  refresh_token: integrationData.refresh_token,
+                  client_id: GOOGLE_CLIENT_ID,
+                  client_secret: GOOGLE_CLIENT_SECRET,
+                  grant_type: 'refresh_token',
+                }),
+              });
+              
+              const refreshResponseText = await refreshResponse.text();
+              console.log('Token refresh response:', refreshResponseText);
+              
+              if (!refreshResponse.ok) {
+                console.error('Token refresh error:', refreshResponseText);
+                throw new Error(`Failed to refresh token: ${refreshResponseText}`);
+              }
+              
+              const refreshData = JSON.parse(refreshResponseText);
+              console.log('Token refresh successful');
+              
+              // Update tokens in the database
+              const { error: updateError } = await supabase
+                .from('user_integrations')
+                .update({
+                  access_token: refreshData.access_token,
+                  expires_at: new Date(Date.now() + (refreshData.expires_in * 1000)).toISOString(),
+                  updated_at: new Date().toISOString()
+                })
+                .match({ user_id: userId, provider: 'google_calendar' });
+              
+              if (updateError) {
+                console.error('Error updating tokens in database:', updateError);
+              }
+              
+              return new Response(JSON.stringify({
+                access_token: refreshData.access_token,
+                refresh_token: integrationData.refresh_token,
+                expires_in: refreshData.expires_in,
+                found: true
+              }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              });
+            }
+            
             return new Response(JSON.stringify({
-              message: 'No Google Calendar integration found for this user',
+              access_token: integrationData.access_token,
+              refresh_token: integrationData.refresh_token,
+              expires_in: Math.floor((expiresAt - now) / 1000),
+              found: true
+            }), {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
+          } catch (tableError) {
+            console.error('Error with user_integrations table:', tableError);
+            return new Response(JSON.stringify({
+              message: 'User integrations table not available',
               found: false
             }), {
               headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             });
           }
-          
-          console.log('Tokens fetched from database for user:', userId);
-          
-          // Check if tokens are expired
-          const expiresAt = new Date(integrationData.expires_at).getTime();
-          const now = Date.now();
-          
-          if (now >= expiresAt) {
-            console.log('Access token expired, refreshing...');
-            
-            // Refresh token
-            const refreshResponse = await fetch('https://oauth2.googleapis.com/token', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-              },
-              body: new URLSearchParams({
-                refresh_token: integrationData.refresh_token,
-                client_id: GOOGLE_CLIENT_ID,
-                client_secret: GOOGLE_CLIENT_SECRET,
-                grant_type: 'refresh_token',
-              }),
-            });
-            
-            const refreshResponseText = await refreshResponse.text();
-            console.log('Token refresh response:', refreshResponseText);
-            
-            if (!refreshResponse.ok) {
-              console.error('Token refresh error:', refreshResponseText);
-              throw new Error(`Failed to refresh token: ${refreshResponseText}`);
-            }
-            
-            const refreshData = JSON.parse(refreshResponseText);
-            console.log('Token refresh successful');
-            
-            // Update tokens in the database
-            const { error: updateError } = await supabase
-              .from('user_integrations')
-              .update({
-                access_token: refreshData.access_token,
-                expires_at: new Date(Date.now() + (refreshData.expires_in * 1000)).toISOString(),
-                updated_at: new Date().toISOString()
-              })
-              .match({ user_id: userId, provider: 'google_calendar' });
-            
-            if (updateError) {
-              console.error('Error updating tokens in database:', updateError);
-            }
-            
-            return new Response(JSON.stringify({
-              access_token: refreshData.access_token,
-              refresh_token: integrationData.refresh_token,
-              expires_in: refreshData.expires_in,
-              found: true
-            }), {
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            });
-          }
-          
-          return new Response(JSON.stringify({
-            access_token: integrationData.access_token,
-            refresh_token: integrationData.refresh_token,
-            expires_in: Math.floor((expiresAt - now) / 1000),
-            found: true
-          }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
-        } catch (tableError) {
-          console.error('Error with user_integrations table:', tableError);
-          return new Response(JSON.stringify({
-            message: 'User integrations table not available',
-            found: false
-          }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
+        } catch (error) {
+          console.error('Error getting tokens from database:', error);
+          throw new Error(`Failed to get tokens: ${error.message}`);
         }
-      } catch (error) {
-        console.error('Error getting tokens from database:', error);
-        throw new Error(`Failed to get tokens: ${error.message}`);
+      } catch (error: any) {
+        console.error('Error in get_tokens action:', error);
+        return new Response(JSON.stringify({
+          message: 'No Google Calendar integration found for this user',
+          found: false,
+          error: error.message
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
       }
     }
     
