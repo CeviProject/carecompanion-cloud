@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { useAuth } from './AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/components/ui/use-toast';
@@ -21,6 +21,14 @@ export interface GoogleCalendarContextType {
   }) => Promise<boolean>;
 }
 
+interface UserIntegration {
+  user_id: string;
+  provider: string;
+  access_token: string;
+  refresh_token?: string;
+  expires_at?: string;
+}
+
 const GoogleCalendarContext = createContext<GoogleCalendarContextType>({
   isEnabled: false,
   isAuthorizing: false,
@@ -36,96 +44,53 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
   const [isAuthorizing, setIsAuthorizing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [accessToken, setAccessToken] = useState<string | null>(null);
-  const [hasAttemptedFetch, setHasAttemptedFetch] = useState(false);
+  const isFetchingRef = useRef(false);
+  const hasInitializedRef = useRef(false);
 
   const fetchGoogleCalendarToken = async () => {
-    if (!user || hasAttemptedFetch) return;
-    
-    setHasAttemptedFetch(true);
-    setIsLoading(true);
+    if (!user || isFetchingRef.current) return null;
     
     try {
+      isFetchingRef.current = true;
       console.log('Fetching Google Calendar token for user:', user.id);
-      const { data, error } = await supabase
-        .from('user_integrations')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('provider', 'google_calendar')
-        .single();
       
-      if (error) {
-        if (error.code !== 'PGRST116') { // Not found error code
-          console.error('Error fetching Google Calendar integration:', error);
-        }
-        setIsEnabled(false);
-        setAccessToken(null);
-        return;
+      // Call our edge function to get tokens safely
+      const response = await fetch('/api/google-calendar-event', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'get_tokens',
+          userId: user.id
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch tokens');
       }
       
-      if (data) {
+      const result = await response.json();
+      
+      if (result.found && result.access_token) {
         console.log('Google Calendar integration found');
         setIsEnabled(true);
-        setAccessToken(data.access_token);
-        
-        // Check if token needs refresh
-        const expiresAt = new Date(data.expires_at);
-        const now = new Date();
-        const expiresInMs = expiresAt.getTime() - now.getTime();
-        
-        if (expiresInMs < 300000) { // Less than 5 minutes remaining
-          console.log('Token expiring soon, refreshing...');
-          await refreshToken();
-        }
+        setAccessToken(result.access_token);
+        return result.access_token;
       } else {
+        console.log('No Google Calendar integration found');
         setIsEnabled(false);
         setAccessToken(null);
+        return null;
       }
     } catch (error) {
       console.error('Error in fetchGoogleCalendarToken:', error);
       setIsEnabled(false);
       setAccessToken(null);
+      return null;
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const refreshToken = async () => {
-    if (!user) return;
-    
-    try {
-      const { data, error } = await supabase
-        .from('user_integrations')
-        .select('refresh_token')
-        .eq('user_id', user.id)
-        .eq('provider', 'google_calendar')
-        .single();
-      
-      if (error || !data?.refresh_token) {
-        throw new Error('Refresh token not found');
-      }
-      
-      const response = await fetch('/api/google-calendar/refresh-token', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          refresh_token: data.refresh_token,
-          user_id: user.id
-        }),
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to refresh token');
-      }
-      
-      const result = await response.json();
-      setAccessToken(result.access_token);
-      
-    } catch (error) {
-      console.error('Error refreshing token:', error);
-      setIsEnabled(false);
-      setAccessToken(null);
+      isFetchingRef.current = false;
     }
   };
 
@@ -179,12 +144,12 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
   const getAccessToken = async (): Promise<string | null> => {
     if (accessToken) return accessToken;
     
-    // Try to fetch a fresh token
-    if (user && !isLoading && !hasAttemptedFetch) {
-      await fetchGoogleCalendarToken();
+    // Only try to fetch a fresh token if not already loading and we haven't tried yet
+    if (user && !isLoading && !isFetchingRef.current) {
+      return await fetchGoogleCalendarToken();
     }
     
-    return accessToken;
+    return null;
   };
 
   const addEvent = async (eventDetails: {
@@ -213,9 +178,23 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(eventDetails)
+        body: JSON.stringify({
+          action: 'create',
+          accessToken: token,
+          event: {
+            summary: eventDetails.summary,
+            description: eventDetails.description || '',
+            location: eventDetails.location || '',
+            startTime: eventDetails.start.toISOString(),
+            endTime: eventDetails.end.toISOString(),
+            attendees: eventDetails.attendees || [],
+            reminders: eventDetails.reminders || [
+              { method: 'email', minutes: 24 * 60 },
+              { method: 'popup', minutes: 30 }
+            ]
+          }
+        })
       });
       
       if (!response.ok) {
@@ -241,13 +220,102 @@ export const GoogleCalendarProvider: React.FC<{ children: React.ReactNode }> = (
   };
 
   useEffect(() => {
-    if (user) {
+    // Only initialize once when the component mounts or when user changes
+    if (user && !hasInitializedRef.current && !isFetchingRef.current) {
+      hasInitializedRef.current = true;
       fetchGoogleCalendarToken();
-    } else {
+    } else if (!user) {
+      // Reset when user logs out
       setIsEnabled(false);
       setAccessToken(null);
       setIsLoading(false);
+      hasInitializedRef.current = false;
     }
+  }, [user]);
+
+  // Setup message listener for OAuth callback
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      // Verify origin for security
+      const allowedOrigins = [window.location.origin];
+      if (!allowedOrigins.includes(event.origin)) return;
+      
+      if (event.data.type === 'google_auth_callback' && event.data.code) {
+        console.log('Received auth code from popup');
+        // Process the auth code
+        processAuthCode(event.data.code);
+      }
+    };
+    
+    // Check if we have a code stored in localStorage (as fallback)
+    const checkStoredAuthCode = () => {
+      const storedCode = localStorage.getItem('google_auth_code');
+      const timestamp = localStorage.getItem('google_auth_timestamp');
+      
+      if (storedCode && timestamp) {
+        // Only use codes that are less than 5 minutes old
+        const age = Date.now() - parseInt(timestamp, 10);
+        if (age < 5 * 60 * 1000) {
+          console.log('Found stored auth code, processing');
+          processAuthCode(storedCode);
+          
+          // Clean up after processing
+          localStorage.removeItem('google_auth_code');
+          localStorage.removeItem('google_auth_timestamp');
+        }
+      }
+    };
+    
+    const processAuthCode = async (code: string) => {
+      if (!user) return;
+      
+      try {
+        setIsLoading(true);
+        
+        const response = await fetch('/api/google-calendar-event', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            action: 'token',
+            code,
+            userId: user.id
+          }),
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to exchange code for tokens');
+        }
+        
+        const data = await response.json();
+        
+        if (data.access_token) {
+          setAccessToken(data.access_token);
+          setIsEnabled(true);
+          toast({
+            title: "Connected!",
+            description: "Google Calendar connected successfully",
+          });
+        }
+      } catch (error) {
+        console.error('Error processing auth code:', error);
+        toast({
+          title: "Connection Failed",
+          description: "Could not connect to Google Calendar",
+          variant: "destructive"
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    window.addEventListener('message', handleMessage);
+    checkStoredAuthCode();
+    
+    return () => {
+      window.removeEventListener('message', handleMessage);
+    };
   }, [user]);
 
   const contextValue: GoogleCalendarContextType = {

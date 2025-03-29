@@ -1,14 +1,26 @@
-import { useState, useEffect } from 'react';
-import { useGoogleCalendar } from '@/context/GoogleCalendarContext';
 
-// Create a wrapper component to use in place of AppointmentBooking
+import { useState, useEffect, useMemo } from 'react';
+import { useGoogleCalendar } from '@/context/GoogleCalendarContext';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { toast } from '@/components/ui/use-toast';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { format } from 'date-fns';
+
+// Wrapper component that handles the Google Calendar integration
 const AppointmentBookingWrapper = (props) => {
-  const { isEnabled: googleCalendarEnabled, authorizeGoogleCalendar } = useGoogleCalendar();
-  const [localGoogleCalendarEnabled, setLocalGoogleCalendarEnabled] = useState(googleCalendarEnabled);
+  const { isEnabled, isLoading, authorizeGoogleCalendar } = useGoogleCalendar();
+  const [localGoogleCalendarEnabled, setLocalGoogleCalendarEnabled] = useState(isEnabled);
   
+  // Update local state when the context changes
   useEffect(() => {
-    setLocalGoogleCalendarEnabled(googleCalendarEnabled);
-  }, [googleCalendarEnabled]);
+    setLocalGoogleCalendarEnabled(isEnabled);
+  }, [isEnabled]);
   
   // Pass the needed props to the original component
   return <OriginalAppointmentBooking 
@@ -16,14 +28,16 @@ const AppointmentBookingWrapper = (props) => {
     googleCalendarEnabled={localGoogleCalendarEnabled}
     setGoogleCalendarEnabled={setLocalGoogleCalendarEnabled}
     authorizeGoogleCalendar={authorizeGoogleCalendar}
+    googleCalendarLoading={isLoading}
   />;
 };
 
-// Rename the original component
+// The original appointment booking component
 const OriginalAppointmentBooking = ({ 
   googleCalendarEnabled, 
   setGoogleCalendarEnabled, 
-  authorizeGoogleCalendar 
+  authorizeGoogleCalendar,
+  googleCalendarLoading
 }) => {
   const [selectedDoctor, setSelectedDoctor] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null);
@@ -34,15 +48,26 @@ const OriginalAppointmentBooking = ({
   const [doctors, setDoctors] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [calendarOpen, setCalendarOpen] = useState(false);
 
   useEffect(() => {
     // Fetch doctors from API
     const fetchDoctors = async () => {
       try {
-        const response = await fetch('/api/doctors');
-        if (!response.ok) throw new Error('Failed to fetch doctors');
-        const data = await response.json();
-        setDoctors(data);
+        // For development, use mock data until the API is ready
+        // In production this would call the real API
+        // const response = await fetch('/api/doctors');
+        // if (!response.ok) throw new Error('Failed to fetch doctors');
+        // const data = await response.json();
+        
+        // Mock data for development
+        const mockDoctors = [
+          { id: '1', name: 'John Smith', specialty: 'Cardiology', address: '123 Medical Center Ave' },
+          { id: '2', name: 'Sarah Johnson', specialty: 'Neurology', address: '456 Health Parkway' },
+          { id: '3', name: 'Robert Chen', specialty: 'Pediatrics', address: '789 Care Boulevard' },
+        ];
+        
+        setDoctors(mockDoctors);
       } catch (err) {
         setError('Failed to load doctors. Please try again later.');
         console.error(err);
@@ -67,8 +92,11 @@ const OriginalAppointmentBooking = ({
     try {
       setIsLoading(true);
       // Format date for API
-      const formattedDate = selectedDate.toISOString().split('T')[0];
+      const formattedDate = selectedDate ? format(selectedDate, 'yyyy-MM-dd') : '';
       
+      // For development, use mock data
+      // In production this would call the real API
+      /* 
       const response = await fetch(
         `/api/availability?doctorId=${selectedDoctor.id}&date=${formattedDate}`
       );
@@ -77,10 +105,18 @@ const OriginalAppointmentBooking = ({
       
       const data = await response.json();
       setAvailableTimes(data.availableTimes || []);
+      */
+      
+      // Mock data for development
+      setTimeout(() => {
+        const mockTimes = ['09:00', '10:00', '11:00', '14:00', '15:00', '16:00'];
+        setAvailableTimes(mockTimes);
+        setIsLoading(false);
+      }, 500);
+      
     } catch (err) {
       setError('Failed to load available times. Please try again.');
       console.error(err);
-    } finally {
       setIsLoading(false);
     }
   };
@@ -109,6 +145,9 @@ const OriginalAppointmentBooking = ({
         addToGoogleCalendar: googleCalendarEnabled
       };
       
+      // For development, simulate a successful API call
+      // In production this would call the real API
+      /*
       const response = await fetch('/api/appointments', {
         method: 'POST',
         headers: {
@@ -120,6 +159,10 @@ const OriginalAppointmentBooking = ({
       if (!response.ok) {
         throw new Error('Failed to book appointment');
       }
+      */
+      
+      // Simulate API delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
       // If Google Calendar is enabled, add event
       if (googleCalendarEnabled) {
@@ -141,7 +184,10 @@ const OriginalAppointmentBooking = ({
       setSelectedTime(null);
       setReason('');
       
-      alert('Appointment booked successfully!');
+      toast({
+        title: "Appointment Booked",
+        description: "Your appointment has been booked successfully.",
+      });
       
     } catch (err) {
       setError('Failed to book appointment. Please try again.');
@@ -158,6 +204,9 @@ const OriginalAppointmentBooking = ({
         return false;
       }
       
+      // For development, simulate a successful API call
+      // In production this would call the real API
+      /*
       const response = await fetch('/api/google-calendar', {
         method: 'POST',
         headers: {
@@ -169,6 +218,10 @@ const OriginalAppointmentBooking = ({
       if (!response.ok) {
         throw new Error('Failed to add event to Google Calendar');
       }
+      */
+      
+      // Simulate API delay
+      await new Promise(resolve => setTimeout(resolve, 500));
       
       return true;
     } catch (err) {
@@ -188,100 +241,128 @@ const OriginalAppointmentBooking = ({
   };
 
   if (isLoading && doctors.length === 0) {
-    return <div>Loading doctors...</div>;
+    return <div className="flex justify-center p-8">Loading doctors...</div>;
   }
 
   return (
-    <div className="appointment-booking">
-      <h2>Book an Appointment</h2>
+    <div className="space-y-6">
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded relative" role="alert">
+          <span className="block sm:inline">{error}</span>
+        </div>
+      )}
       
-      {error && <div className="error-message">{error}</div>}
-      
-      <form onSubmit={handleSubmit}>
-        <div className="form-group">
-          <label htmlFor="doctor">Select Doctor:</label>
-          <select 
-            id="doctor"
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="space-y-2">
+          <Label htmlFor="doctor">Select Doctor</Label>
+          <Select 
             value={selectedDoctor?.id || ''}
-            onChange={(e) => {
-              const doctor = doctors.find(d => d.id === e.target.value);
+            onValueChange={(value) => {
+              const doctor = doctors.find(d => d.id === value);
               setSelectedDoctor(doctor);
             }}
             disabled={isSubmitting}
-            required
           >
-            <option value="">-- Select a doctor --</option>
-            {doctors.map(doctor => (
-              <option key={doctor.id} value={doctor.id}>
-                Dr. {doctor.name} - {doctor.specialty}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger id="doctor" className="w-full">
+              <SelectValue placeholder="-- Select a doctor --" />
+            </SelectTrigger>
+            <SelectContent>
+              {doctors.map(doctor => (
+                <SelectItem key={doctor.id} value={doctor.id}>
+                  Dr. {doctor.name} - {doctor.specialty}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         
-        <div className="form-group">
-          <label htmlFor="date">Select Date:</label>
-          <input
-            type="date"
-            id="date"
-            min={new Date().toISOString().split('T')[0]}
-            value={selectedDate ? selectedDate.toISOString().split('T')[0] : ''}
-            onChange={(e) => setSelectedDate(e.target.value ? new Date(e.target.value) : null)}
-            disabled={isSubmitting || !selectedDoctor}
-            required
-          />
+        <div className="space-y-2">
+          <Label htmlFor="date">Select Date</Label>
+          <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className="w-full justify-start text-left font-normal"
+                disabled={isSubmitting || !selectedDoctor}
+              >
+                {selectedDate ? format(selectedDate, 'PPP') : "Pick a date"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={selectedDate}
+                onSelect={(date) => {
+                  setSelectedDate(date);
+                  setCalendarOpen(false);
+                }}
+                disabled={(date) => {
+                  // Disable past dates
+                  const today = new Date();
+                  today.setHours(0, 0, 0, 0);
+                  return date < today;
+                }}
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
         </div>
         
-        <div className="form-group">
-          <label htmlFor="time">Select Time:</label>
-          <select
-            id="time"
+        <div className="space-y-2">
+          <Label htmlFor="time">Select Time</Label>
+          <Select
             value={selectedTime || ''}
-            onChange={(e) => setSelectedTime(e.target.value)}
+            onValueChange={setSelectedTime}
             disabled={isSubmitting || !selectedDate || availableTimes.length === 0}
-            required
           >
-            <option value="">-- Select a time --</option>
-            {availableTimes.map(time => (
-              <option key={time} value={time}>
-                {time}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger id="time" className="w-full">
+              <SelectValue placeholder="-- Select a time --" />
+            </SelectTrigger>
+            <SelectContent>
+              {availableTimes.map(time => (
+                <SelectItem key={time} value={time}>
+                  {time}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           {selectedDate && availableTimes.length === 0 && !isLoading && (
-            <p className="no-times">No available times for this date. Please select another date.</p>
+            <p className="text-sm text-red-500">No available times for this date. Please select another date.</p>
           )}
         </div>
         
-        <div className="form-group">
-          <label htmlFor="reason">Reason for Visit:</label>
-          <textarea
+        <div className="space-y-2">
+          <Label htmlFor="reason">Reason for Visit</Label>
+          <Textarea
             id="reason"
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             disabled={isSubmitting}
             rows={3}
+            placeholder="Please describe the reason for your appointment"
+            className="resize-none"
           />
         </div>
         
-        <div className="form-group calendar-integration">
-          <label>
-            <input
-              type="checkbox"
-              checked={googleCalendarEnabled}
-              onChange={handleGoogleCalendarToggle}
-              disabled={isSubmitting}
-            />
+        <div className="flex items-center space-x-2 py-2">
+          <Switch
+            id="google-calendar"
+            checked={googleCalendarEnabled}
+            onCheckedChange={handleGoogleCalendarToggle}
+            disabled={isSubmitting || googleCalendarLoading}
+          />
+          <Label htmlFor="google-calendar" className="cursor-pointer">
             Add to Google Calendar
-          </label>
+          </Label>
         </div>
         
-        <button 
+        <Button 
           type="submit" 
           disabled={isSubmitting || !selectedDoctor || !selectedDate || !selectedTime}
+          className="w-full"
         >
           {isSubmitting ? 'Booking...' : 'Book Appointment'}
-        </button>
+        </Button>
       </form>
     </div>
   );

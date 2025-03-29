@@ -4,6 +4,7 @@ import PatientNavbar from '@/components/patient/PatientNavbar';
 import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import HealthAssessment from '@/components/patient/HealthAssessment';
+import { GoogleCalendarProvider } from '@/context/GoogleCalendarContext';
 
 const PatientAssessment = () => {
   const { user, profile } = useAuth();
@@ -24,7 +25,9 @@ const PatientAssessment = () => {
             <CardTitle>Your Health Assessment</CardTitle>
           </CardHeader>
           <CardContent>
-            <HealthAssessment />
+            <GoogleCalendarProvider>
+              <HealthAssessment />
+            </GoogleCalendarProvider>
           </CardContent>
         </Card>
       </div>
