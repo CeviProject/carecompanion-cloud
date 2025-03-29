@@ -2,21 +2,12 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
-
-interface Profile {
-  id: string;
-  first_name: string;
-  last_name: string;
-  role: 'patient' | 'doctor';
-  age?: number;
-  specialty?: string;
-}
+import { ProfileProvider, useProfile } from './ProfileContext';
+import * as AuthService from '@/services/AuthService';
 
 interface AuthContextType {
   user: User | null;
-  profile: Profile | null;
   signUp: (
     email: string, 
     password: string, 
@@ -37,7 +28,6 @@ interface AuthContextType {
 // Create context with default values
 const AuthContext = createContext<AuthContextType>({
   user: null,
-  profile: null,
   signUp: async () => { console.error("AuthProvider not initialized") },
   signIn: async () => { console.error("AuthProvider not initialized") },
   signOut: async () => { console.error("AuthProvider not initialized") },
@@ -45,12 +35,23 @@ const AuthContext = createContext<AuthContextType>({
   isAuthenticated: false
 });
 
-export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+// Create a combined provider that includes both auth and profile
+export const AuthProfileProvider = ({ children }: { children: React.ReactNode }) => {
+  return (
+    <ProfileProvider>
+      <AuthProviderInternal>
+        {children}
+      </AuthProviderInternal>
+    </ProfileProvider>
+  );
+};
+
+// Internal Auth Provider that uses the Profile context
+const AuthProviderInternal = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isProfileFetching, setIsProfileFetching] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const { fetchProfile, isProfileFetching } = useProfile();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -68,12 +69,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           setUser(session.user);
           setIsAuthenticated(true);
           
-          if (!isProfileFetching && !profile) {
+          if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
             fetchProfile(session.user.id);
           }
         } else {
           setUser(null);
-          setProfile(null);
           setIsAuthenticated(false);
         }
         
@@ -109,39 +109,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return () => {
       subscription.unsubscribe();
     };
-  }, []);
-  
-  const fetchProfile = async (userId: string) => {
-    try {
-      setIsProfileFetching(true);
-      console.log('Fetching profile for user:', userId);
-      
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
-      
-      if (error) {
-        throw error;
-      }
-      
-      if (data) {
-        console.log('Profile fetched:', data);
-        setProfile(data as Profile);
-      } else {
-        console.log('No profile found for user');
-        setProfile(null);
-      }
-    } catch (error) {
-      console.error('Error fetching profile:', error);
-      setProfile(null);
-    } finally {
-      setIsProfileFetching(false);
-      // Ensure loading is set to false after profile fetch
-      setLoading(false);
-    }
-  };
+  }, [fetchProfile]);
 
   const signUp = async (
     email: string,
@@ -156,24 +124,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   ) => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email: email,
-        password: password,
-        options: {
-          data: userData
-        }
-      });
-      if (error) {
-        console.error('Signup error:', error);
-        toast.error(error.message);
-      } else {
-        console.log('Signup successful:', data);
-        toast.success('Signup successful! Please check your email to verify your account.');
-        navigate('/');
-      }
-    } catch (error: any) {
-      console.error('Unexpected signup error:', error);
-      toast.error(error.message || 'An unexpected error occurred during signup.');
+      await AuthService.signUp(email, password, userData);
+      navigate('/');
     } finally {
       setLoading(false);
     }
@@ -182,20 +134,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const signIn = async (email: string, password: string) => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: email,
-        password: password,
-      });
-      if (error) {
-        console.error('Signin error:', error);
-        toast.error(error.message);
-      } else {
-        console.log('Signin successful:', data);
-        toast.success('Signin successful!');
-      }
-    } catch (error: any) {
-      console.error('Unexpected signin error:', error);
-      toast.error(error.message || 'An unexpected error occurred during signin.');
+      await AuthService.signIn(email, password);
     } finally {
       setLoading(false);
     }
@@ -204,18 +143,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const signOut = async () => {
     setLoading(true);
     try {
-      const { error } = await supabase.auth.signOut();
-      if (error) {
-        console.error('Signout error:', error);
-        toast.error(error.message);
-      } else {
-        console.log('Signout successful');
-        toast.success('Signout successful!');
-        navigate('/');
-      }
-    } catch (error: any) {
-      console.error('Unexpected signout error:', error);
-      toast.error(error.message || 'An unexpected error occurred during signout.');
+      await AuthService.signOut();
+      navigate('/');
     } finally {
       setLoading(false);
     }
@@ -223,7 +152,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const value = {
     user,
-    profile,
     signUp,
     signIn,
     signOut,
@@ -240,5 +168,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
   return context;
 };
+
+// For backward compatibility, export AuthProvider as well
+export const AuthProvider = AuthProfileProvider;
