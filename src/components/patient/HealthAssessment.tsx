@@ -140,6 +140,37 @@ const HealthAssessment = ({
     });
   };
 
+  // Extract specialists from the assessment if not provided
+  const extractedSpecialties = suggestedSpecialties || 
+    extractSection(parsedAssessment || "", "medical specialists")
+      .split('\n')
+      .filter(line => line.trim().startsWith('•') || line.trim().startsWith('-') || line.trim().startsWith('*'))
+      .map(line => cleanMarkdown(line.trim().replace(/^[\*\-•]\s/, '')));
+
+  // Extract hospitals from the assessment if not provided
+  const extractedHospitals = recommendedHospitals || 
+    extractSection(parsedAssessment || "", "recommended hospitals")
+      .split('\n')
+      .filter(line => line.trim().startsWith('•') || line.trim().startsWith('-') || line.trim().startsWith('*'))
+      .map(line => {
+        const cleanedLine = cleanMarkdown(line.trim().replace(/^[\*\-•]\s/, ''));
+        const parts = cleanedLine.split(':');
+        
+        if (parts.length > 1) {
+          return {
+            name: parts[0].trim(),
+            address: parts[1].trim(),
+            specialty: ''
+          };
+        } else {
+          return {
+            name: cleanedLine,
+            address: 'Address not provided',
+            specialty: ''
+          };
+        }
+      });
+
   return (
     <Card className="glass-card p-6 space-y-6">
       <div>
@@ -194,9 +225,9 @@ const HealthAssessment = ({
             <h3 className="text-lg font-medium">Recommended Specialists</h3>
           </div>
           
-          {suggestedSpecialties && suggestedSpecialties.length > 0 ? (
+          {extractedSpecialties && extractedSpecialties.length > 0 ? (
             <div className="flex flex-wrap gap-2">
-              {suggestedSpecialties.map((specialty, index) => (
+              {extractedSpecialties.map((specialty, index) => (
                 <Badge key={index} variant="outline" className="bg-primary/10">
                   {cleanMarkdown(specialty)}
                 </Badge>
@@ -209,14 +240,14 @@ const HealthAssessment = ({
       </div>
       
       {/* Hospitals section */}
-      {recommendedHospitals && recommendedHospitals.length > 0 && (
+      {extractedHospitals && extractedHospitals.length > 0 && (
         <div>
           <h3 className="text-lg font-medium mb-3 flex items-center">
             <Building className="h-5 w-5 text-primary mr-2" />
             Nearby Medical Facilities
           </h3>
           <div className="space-y-3">
-            {recommendedHospitals.map((hospital, index) => (
+            {extractedHospitals.map((hospital, index) => (
               <div key={index} className="border rounded-lg p-3 bg-card/50">
                 <div className="flex items-start">
                   <Building className="h-5 w-5 text-primary mr-2 mt-0.5" />

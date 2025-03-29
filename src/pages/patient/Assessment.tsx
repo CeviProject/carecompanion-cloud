@@ -19,12 +19,13 @@ const Assessment = () => {
   const [pastQueries, setPastQueries] = useState<HealthQuery[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('latest');
+  const [dataFetched, setDataFetched] = useState(false);
 
   useEffect(() => {
-    if (user) {
+    if (user && !dataFetched) {
       fetchHealthQueries();
     }
-  }, [user]);
+  }, [user, dataFetched]);
 
   const fetchHealthQueries = async () => {
     try {
@@ -51,6 +52,8 @@ const Assessment = () => {
         setLatestQuery(null);
         setPastQueries([]);
       }
+      
+      setDataFetched(true);
     } catch (error: any) {
       console.error('Error in fetchHealthQueries:', error);
     } finally {
@@ -66,6 +69,10 @@ const Assessment = () => {
     setLatestQuery(query);
     setActiveTab('latest');
     window.scrollTo(0, 0);
+  };
+
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
   };
 
   return (
@@ -84,7 +91,7 @@ const Assessment = () => {
           </Button>
         </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <Tabs value={activeTab} onValueChange={handleTabChange}>
           <TabsList className="mb-4">
             <TabsTrigger value="latest">Latest Assessment</TabsTrigger>
             <TabsTrigger value="history">Assessment History</TabsTrigger>
