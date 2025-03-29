@@ -23,6 +23,15 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   loading: boolean;
   isAuthenticated: boolean;
+  // Add profile property for backward compatibility
+  profile: {
+    id: string;
+    first_name: string;
+    last_name: string;
+    role: 'patient' | 'doctor';
+    age?: number;
+    specialty?: string;
+  } | null;
 }
 
 // Create context with default values
@@ -32,7 +41,8 @@ const AuthContext = createContext<AuthContextType>({
   signIn: async () => { console.error("AuthProvider not initialized") },
   signOut: async () => { console.error("AuthProvider not initialized") },
   loading: true,
-  isAuthenticated: false
+  isAuthenticated: false,
+  profile: null // Add default profile value
 });
 
 // Create a combined provider that includes both auth and profile
@@ -51,7 +61,7 @@ const AuthProviderInternal = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const { fetchProfile, isProfileFetching } = useProfile();
+  const { fetchProfile, isProfileFetching, profile } = useProfile();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -156,7 +166,8 @@ const AuthProviderInternal = ({ children }: { children: React.ReactNode }) => {
     signIn,
     signOut,
     loading: loading || isProfileFetching,
-    isAuthenticated
+    isAuthenticated,
+    profile // Add profile to the context value
   };
 
   return (
