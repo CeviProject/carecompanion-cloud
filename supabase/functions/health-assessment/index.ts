@@ -52,7 +52,7 @@ ${patientDetails}
 Patient's Symptoms and Concerns:
 "${healthQuery}"
 
-Please include:
+Please include each of the following sections with clear headers and structured content:
 
 1. Possible conditions that might explain these symptoms:
    • List the top 3-5 potential conditions with brief explanations
@@ -63,15 +63,17 @@ Please include:
    • Self-care measures
    • When to seek medical care
 
-3. Medical specialists that would be appropriate to consult:
+3. Warning signs that would indicate a need for immediate medical attention:
+   • List specific symptoms or changes that require urgent care
+   • Be specific about when to go to the emergency room
+
+4. Medical specialists that would be appropriate to consult:
    • List the top 2-3 relevant medical specialties
 
-4. Warning signs that would indicate a need for immediate medical attention
-
 5. Recommended hospitals or clinics near ${patientData?.location || 'the patient'}:
-   • List 3 recommended medical facilities with their specialties and approximate addresses
+   • List 3 recommended medical facilities with their specialties and addresses
 
-Format your response in a clear manner that is informative but not alarming. DO NOT use markdown formatting (no asterisks for bold or italics) to improve readability in our interface. Use simple text format with clear section headers and bullet points.
+Format your response with clear section headings (numbered 1-5) and use simple text format with bullet points where appropriate for better readability. Avoid using markdown formatting like asterisks for bold or italics.
 `;
 
     console.log('Making request to Gemini API with prompt length:', prompt.length);
@@ -202,6 +204,29 @@ function extractSuggestedSpecialties(assessment: string): string[] {
   const lowercaseAssessment = assessment.toLowerCase();
   const matchedSpecialties: string[] = [];
 
+  // Try to extract specialties from section 4 first (more accurate)
+  const specialistSection = extractSection(assessment, "medical specialists");
+  
+  if (specialistSection) {
+    // Extract bullet points from the section
+    const bulletPoints = specialistSection.split('\n')
+      .filter(line => /^[\*\-•]/.test(line.trim()))
+      .map(line => cleanMarkdown(line.replace(/^[\*\-•]\s*/, '')));
+    
+    if (bulletPoints.length > 0) {
+      return bulletPoints.map(specialty => {
+        // If specialty contains ":" or "-", take the first part
+        if (specialty.includes(':')) {
+          return specialty.split(':')[0].trim();
+        }
+        if (specialty.includes(' - ')) {
+          return specialty.split(' - ')[0].trim();
+        }
+        return specialty.trim();
+      });
+    }
+  }
+
   // Check for mentions of specialists in the assessment
   for (const [specialty, keywords] of Object.entries(specialtiesMap)) {
     if (keywords.some(keyword => lowercaseAssessment.includes(keyword))) {
@@ -223,141 +248,91 @@ function extractSuggestedSpecialties(assessment: string): string[] {
   return matchedSpecialties.map(specialty => cleanMarkdown(specialty));
 }
 
+function extractSection(text: string, sectionName: string): string {
+  if (!text) return '';
+  
+  // Look for numbered section header (e.g., "4. Medical specialists")
+  const numberedSectionRegex = new RegExp(`\\d+\\.\\s+(${sectionName}[^\\n]*)[\\n\\s]*((?:(?!\\d+\\.).|\\n)*)`, 'i');
+  const numberedMatch = text.match(numberedSectionRegex);
+  
+  if (numberedMatch && numberedMatch[2]) {
+    return numberedMatch[2].trim();
+  }
+  
+  // Try to find sections by header (e.g., "Medical specialists:")
+  const headerRegex = new RegExp(`${sectionName}[^:]*:[\\n\\s]*((?:(?!\\n\\s*\\w+:).|\\n)*)`, 'i');
+  const headerMatch = text.match(headerRegex);
+  
+  if (headerMatch && headerMatch[1]) {
+    return headerMatch[1].trim();
+  }
+  
+  return '';
+}
+
 function extractRecommendedHospitals(assessment: string): Array<{ name: string, address: string, specialty: string }> {
   const hospitals: Array<{ name: string, address: string, specialty: string }> = [];
   
-  // Try to find the "Recommended hospitals" section
-  const sections = assessment.split(/\d+\.\s+/);
-  let hospitalSection = "";
-  
-  // Look for the section that contains hospital recommendations
-  for (const section of sections) {
-    if (
-      section.toLowerCase().includes("hospital") || 
-      section.toLowerCase().includes("clinic") || 
-      section.toLowerCase().includes("medical center") ||
-      section.toLowerCase().includes("medical facility")
-    ) {
-      hospitalSection = section;
-      break;
-    }
-  }
+  // Extract the hospitals section specifically
+  const hospitalSection = extractSection(assessment, "recommended hospitals");
   
   if (!hospitalSection) {
-    // If we couldn't identify a specific section, look for bullet points with hospital names
-    const lines = assessment.split('\n');
-    let inHospitalSection = false;
+    return [
+      {
+        name: "Please consult with a local healthcare provider",
+        address: "For location-specific recommendations",
+        specialty: "General"
+      }
+    ];
+  }
+  
+  // Process the hospital section
+  const lines = hospitalSection.split('\n');
+  
+  for (const line of lines) {
+    const trimmedLine = line.trim();
     
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
+    // Look for bullet points or numbered items
+    if (trimmedLine.startsWith('*') || trimmedLine.startsWith('-') || trimmedLine.match(/^\d+\./)) {
+      const cleanLine = trimmedLine.replace(/^[\*\-\d\.]+\s*/, '').trim();
       
-      // Check if we've entered a hospital section
-      if (
-        line.toLowerCase().includes("recommended hospital") || 
-        line.toLowerCase().includes("nearby hospital") ||
-        line.toLowerCase().includes("medical facilities")
-      ) {
-        inHospitalSection = true;
-        continue;
+      // Extract name and address
+      let name = cleanLine;
+      let address = "";
+      let specialty = "";
+      
+      // Try to separate name from address
+      if (cleanLine.includes(':')) {
+        [name, address] = cleanLine.split(':').map(s => s.trim());
+      } else if (cleanLine.includes(' - ')) {
+        [name, address] = cleanLine.split(' - ').map(s => s.trim());
+      } else if (cleanLine.toLowerCase().includes('located at')) {
+        [name, address] = cleanLine.split(/located at/i).map(s => s.trim());
       }
       
-      // If we're in the hospital section and find a bullet point, extract hospital data
-      if (inHospitalSection && (line.startsWith('*') || line.startsWith('-') || line.match(/^\d+\./))) {
-        const cleanLine = line.replace(/^[\*\-\d\.]+\s*/, '').trim();
-        
-        // Extract name and address using common patterns
-        let name = cleanLine;
-        let address = "";
-        let specialty = "";
-        
-        // Look for a separator like ":" or "-" or "located at" to separate name and address
-        if (cleanLine.includes(':')) {
-          [name, address] = cleanLine.split(':').map(s => s.trim());
-        } else if (cleanLine.includes(' - ')) {
-          [name, address] = cleanLine.split(' - ').map(s => s.trim());
-        } else if (cleanLine.toLowerCase().includes('located at')) {
-          [name, address] = cleanLine.split(/located at/i).map(s => s.trim());
-        }
-        
-        // Check for specialty information
-        if (address.toLowerCase().includes('specialist in') || address.toLowerCase().includes('specializing in')) {
-          const specialtyMatch = address.match(/(specialist|specializing) in ([^,\.]+)/i);
-          if (specialtyMatch) {
-            specialty = specialtyMatch[2].trim();
-            address = address.replace(/(specialist|specializing) in ([^,\.]+)/i, '').trim();
-          }
-        } else if (name.toLowerCase().includes('specialist in') || name.toLowerCase().includes('specializing in')) {
-          const specialtyMatch = name.match(/(specialist|specializing) in ([^,\.]+)/i);
-          if (specialtyMatch) {
-            specialty = specialtyMatch[2].trim();
-            name = name.replace(/(specialist|specializing) in ([^,\.]+)/i, '').trim();
-          }
-        }
-        
-        // If we have at least a name, add to hospitals
-        if (name) {
-          hospitals.push({ 
-            name: cleanMarkdown(name), 
-            address: cleanMarkdown(address || "Address not provided"), 
-            specialty: cleanMarkdown(specialty || "")
-          });
-        }
+      // Extract specialty if mentioned
+      const specialtyMatches = [
+        cleanLine.match(/specialist in ([^,\.]+)/i),
+        cleanLine.match(/specializing in ([^,\.]+)/i),
+        cleanLine.match(/specializes in ([^,\.]+)/i)
+      ].filter(Boolean);
+      
+      if (specialtyMatches.length > 0) {
+        specialty = specialtyMatches[0]![1].trim();
       }
       
-      // If we found 3 or more hospitals, or we've left the hospital section, break
-      if (hospitals.length >= 3 || (inHospitalSection && line.match(/^\d+\.\s+/) && !line.toLowerCase().includes("hospital"))) {
+      // If we have at least a name, add to hospitals
+      if (name) {
+        hospitals.push({ 
+          name: cleanMarkdown(name), 
+          address: cleanMarkdown(address || "Address not provided"), 
+          specialty: cleanMarkdown(specialty || "")
+        });
+      }
+      
+      // Stop after finding 3 hospitals
+      if (hospitals.length >= 3) {
         break;
-      }
-    }
-  } else {
-    // Process the hospital section if found
-    const lines = hospitalSection.split('\n');
-    
-    for (const line of lines) {
-      const trimmedLine = line.trim();
-      
-      // Look for bullet points or numbered items
-      if (trimmedLine.startsWith('*') || trimmedLine.startsWith('-') || trimmedLine.match(/^\d+\./)) {
-        const cleanLine = trimmedLine.replace(/^[\*\-\d\.]+\s*/, '').trim();
-        
-        // Extract name and address
-        let name = cleanLine;
-        let address = "";
-        let specialty = "";
-        
-        // Try to separate name from address
-        if (cleanLine.includes(':')) {
-          [name, address] = cleanLine.split(':').map(s => s.trim());
-        } else if (cleanLine.includes(' - ')) {
-          [name, address] = cleanLine.split(' - ').map(s => s.trim());
-        } else if (cleanLine.toLowerCase().includes('located at')) {
-          [name, address] = cleanLine.split(/located at/i).map(s => s.trim());
-        }
-        
-        // Extract specialty if mentioned
-        const specialtyMatches = [
-          cleanLine.match(/specialist in ([^,\.]+)/i),
-          cleanLine.match(/specializing in ([^,\.]+)/i),
-          cleanLine.match(/specializes in ([^,\.]+)/i)
-        ].filter(Boolean);
-        
-        if (specialtyMatches.length > 0) {
-          specialty = specialtyMatches[0]![1].trim();
-        }
-        
-        // If we have at least a name, add to hospitals
-        if (name) {
-          hospitals.push({ 
-            name: cleanMarkdown(name), 
-            address: cleanMarkdown(address || "Address not provided"), 
-            specialty: cleanMarkdown(specialty || "")
-          });
-        }
-        
-        // Stop after finding 3 hospitals
-        if (hospitals.length >= 3) {
-          break;
-        }
       }
     }
   }

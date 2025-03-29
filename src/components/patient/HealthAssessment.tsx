@@ -60,21 +60,6 @@ const HealthAssessment = ({
     }
   }
   
-  // Extract sections from the assessment text
-  const extractSection = (text: string, sectionIdentifier: string): string => {
-    const sections = text.split(/\d+\.\s+/);
-    for (const section of sections) {
-      if (section.toLowerCase().includes(sectionIdentifier.toLowerCase())) {
-        return section.trim();
-      }
-    }
-    return "";
-  };
-
-  const possibleConditions = extractSection(parsedAssessment || "", "possible conditions");
-  const recommendations = extractSection(parsedAssessment || "", "recommendations");
-  const warningSignsSection = extractSection(parsedAssessment || "", "warning signs");
-  
   // Clean text from markdown characters
   const cleanMarkdown = (text: string): string => {
     return text
@@ -87,6 +72,42 @@ const HealthAssessment = ({
       .replace(/\[(.*?)\]\((.*?)\)/g, '$1') // Remove links, keep text
       .trim();
   };
+  
+  // Extract sections from the assessment text
+  const extractSection = (text: string, sectionIdentifier: string): string => {
+    if (!text) return "";
+    
+    // Try to find sections by number (1. Section Title)
+    const numberedRegex = new RegExp(`\\d+\\.\\s+(${sectionIdentifier}[^\\n]*)[\\n\\s]*((?:(?!\\d+\\.).|\\n)*)`, 'i');
+    const numberedMatch = text.match(numberedRegex);
+    
+    if (numberedMatch && numberedMatch[2]) {
+      return cleanMarkdown(numberedMatch[2].trim());
+    }
+    
+    // Try to find sections by header (Section Title:)
+    const headerRegex = new RegExp(`${sectionIdentifier}[^:]*:[\\n\\s]*((?:(?!\\n\\s*\\w+:).|\\n)*)`, 'i');
+    const headerMatch = text.match(headerRegex);
+    
+    if (headerMatch && headerMatch[1]) {
+      return cleanMarkdown(headerMatch[1].trim());
+    }
+    
+    // If no specific section found, check for keywords in paragraphs
+    const paragraphs = text.split('\n\n');
+    for (const paragraph of paragraphs) {
+      if (paragraph.toLowerCase().includes(sectionIdentifier.toLowerCase())) {
+        return cleanMarkdown(paragraph.trim());
+      }
+    }
+    
+    return "";
+  };
+
+  // Intelligently extract sections
+  const possibleConditionsSection = extractSection(parsedAssessment || "", "possible conditions");
+  const recommendationsSection = extractSection(parsedAssessment || "", "recommendations");
+  const warningSignsSection = extractSection(parsedAssessment || "", "warning signs");
   
   // Format a section into readable paragraphs and bullet points
   const formatSection = (text: string): JSX.Element[] => {
@@ -135,7 +156,7 @@ const HealthAssessment = ({
             <h3 className="text-lg font-medium">Possible Conditions</h3>
           </div>
           <div className="space-y-1">
-            {formatSection(possibleConditions)}
+            {formatSection(possibleConditionsSection)}
           </div>
         </div>
         
@@ -146,7 +167,7 @@ const HealthAssessment = ({
             <h3 className="text-lg font-medium">Recommendations</h3>
           </div>
           <div className="space-y-1">
-            {formatSection(recommendations)}
+            {formatSection(recommendationsSection)}
           </div>
         </div>
         
