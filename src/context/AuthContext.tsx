@@ -1,305 +1,226 @@
-
-import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
-import { Session, User } from '@supabase/supabase-js';
-import { useNavigate } from 'react-router-dom';
+import { createContext, useContext, useEffect, useState } from 'react';
+import { User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
 
-type AuthContextType = {
-  session: Session | null;
+interface Profile {
+  id: string;
+  first_name: string;
+  last_name: string;
+  role: 'patient' | 'doctor';
+  age?: number;
+  specialty?: string;
+}
+
+interface AuthContextType {
   user: User | null;
-  profile: any | null;
+  profile: Profile | null;
+  signUp: (
+    email: string, 
+    password: string, 
+    userData: {
+      first_name: string;
+      last_name: string;
+      role: 'patient' | 'doctor';
+      age?: number;
+      specialty?: string;
+    }
+  ) => Promise<void>;
+  signIn: (email: string, password: string) => Promise<void>;
+  signOut: () => Promise<void>;
   loading: boolean;
   isAuthenticated: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, userData: any) => Promise<void>;
-  signOut: () => Promise<void>;
-};
+}
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<any | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isProfileFetching, setIsProfileFetching] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const navigate = useNavigate();
-  
-  // Use a ref to track if the component is mounted
-  const isMounted = useRef(true);
-  // Track if we're currently signing out to prevent race conditions
-  const isSigningOut = useRef(false);
-  // Track the auth subscription
-  const authSubscription = useRef<{ unsubscribe: () => void } | null>(null);
 
-  // Function to clear auth state completely
-  const clearAuthState = useCallback(() => {
-    console.log('Clearing auth state');
-    if (isMounted.current) {
-      setSession(null);
-      setUser(null);
-      setProfile(null);
-      setIsAuthenticated(false);
-    }
-  }, []);
-
-  // Function to fetch profile for a user
-  const fetchProfile = useCallback(async (userId: string) => {
-    console.log('Fetching profile for user:', userId);
+  useEffect(() => {
+    console.log('AuthProvider mounted, setting up auth state listener');
     
+    // First check for existing session
+    console.log('Checking for existing session');
+
+    // Set up auth state change listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('Auth state changed:', event, session?.user?.id);
+        
+        if (session?.user) {
+          setUser(session.user);
+          setIsAuthenticated(true);
+          
+          if (!isProfileFetching && !profile) {
+            fetchProfile(session.user.id);
+          }
+        } else {
+          setUser(null);
+          setProfile(null);
+          setIsAuthenticated(false);
+        }
+        
+        // Only set loading to false after both authentication and profile check
+        if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
+          setLoading(false);
+        }
+      }
+    );
+    
+    // Initial session check
+    const initializeAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (session?.user) {
+          setUser(session.user);
+          setIsAuthenticated(true);
+          await fetchProfile(session.user.id);
+        }
+      } catch (error) {
+        console.error('Error checking auth session:', error);
+      } finally {
+        // Always set loading to false after initial check
+        setLoading(false);
+      }
+    };
+    
+    initializeAuth();
+    
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+  
+  const fetchProfile = async (userId: string) => {
     try {
+      setIsProfileFetching(true);
+      console.log('Fetching profile for user:', userId);
+      
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
-        .maybeSingle();
+        .single();
       
       if (error) {
-        console.error('Error fetching profile:', error);
-        return null;
-      }
-      
-      console.log('Profile fetched:', data);
-      return data;
-    } catch (error) {
-      console.error('Exception fetching profile:', error);
-      return null;
-    }
-  }, []);
-
-  // Function to handle auth state changes
-  const handleAuthChange = useCallback(async (event: string, newSession: Session | null) => {
-    console.log(`Auth state changed: ${event}`, newSession?.user?.id);
-    
-    if (event === 'SIGNED_OUT' || !newSession) {
-      console.log('SIGNED_OUT event detected or no session, clearing state');
-      clearAuthState();
-      return;
-    }
-    
-    if (isSigningOut.current) {
-      console.log('Currently signing out, ignoring auth change');
-      return;
-    }
-    
-    if (isMounted.current) {
-      setSession(newSession);
-      setUser(newSession.user);
-      setIsAuthenticated(!!newSession.user);
-      
-      if (newSession.user) {
-        const profileData = await fetchProfile(newSession.user.id);
-        if (isMounted.current) {
-          setProfile(profileData);
-        }
-      }
-    }
-  }, [clearAuthState, fetchProfile]);
-
-  // Set up auth state management
-  useEffect(() => {
-    console.log('AuthProvider mounted, setting up auth state listener');
-    setLoading(true);
-    isMounted.current = true;
-    
-    // Clean up any existing subscription first
-    if (authSubscription.current) {
-      console.log('Cleaning up existing auth subscription');
-      authSubscription.current.unsubscribe();
-      authSubscription.current = null;
-    }
-    
-    // Set up new auth state listener
-    const setupAuth = async () => {
-      try {
-        // Set up the auth state listener
-        const { data } = supabase.auth.onAuthStateChange(handleAuthChange);
-        authSubscription.current = data.subscription;
-        
-        // Check for existing session
-        console.log('Checking for existing session');
-        const { data: { session: existingSession }, error } = await supabase.auth.getSession();
-        
-        if (error) {
-          console.error('Error getting session:', error);
-          if (isMounted.current) setLoading(false);
-          return;
-        }
-        
-        console.log('Existing session check result:', !!existingSession);
-        
-        if (existingSession && isMounted.current) {
-          setSession(existingSession);
-          setUser(existingSession.user);
-          setIsAuthenticated(!!existingSession.user);
-          
-          if (existingSession.user) {
-            const profileData = await fetchProfile(existingSession.user.id);
-            if (isMounted.current) {
-              setProfile(profileData);
-            }
-          }
-        }
-        
-        if (isMounted.current) setLoading(false);
-      } catch (error) {
-        console.error('Error setting up auth:', error);
-        if (isMounted.current) setLoading(false);
-      }
-    };
-    
-    setupAuth();
-    
-    // Cleanup function
-    return () => {
-      console.log('AuthProvider unmounting, unsubscribing from auth state changes');
-      isMounted.current = false;
-      
-      if (authSubscription.current) {
-        authSubscription.current.unsubscribe();
-        authSubscription.current = null;
-      }
-    };
-  }, [handleAuthChange, fetchProfile]);
-
-  const signIn = async (email: string, password: string) => {
-    try {
-      console.log('Attempting sign in for email:', email);
-      setLoading(true);
-      
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) {
-        console.error('Sign in error:', error.message);
         throw error;
       }
-
-      // Auth state change listener will handle the session update
-      toast.success('Login successful!');
-    } catch (error: any) {
-      console.error('Sign in catch block error:', error.message);
-      toast.error(error.message || 'Failed to sign in');
-      throw error;
+      
+      if (data) {
+        console.log('Profile fetched:', data);
+        setProfile(data as Profile);
+      } else {
+        console.log('No profile found for user');
+        setProfile(null);
+      }
+    } catch (error) {
+      console.error('Error fetching profile:', error);
+      setProfile(null);
     } finally {
-      if (isMounted.current) setLoading(false);
+      setIsProfileFetching(false);
+      // Ensure loading is set to false after profile fetch
+      setLoading(false);
     }
   };
 
-  const signUp = async (email: string, password: string, userData: any) => {
+  const signUp = async (
+    email: string,
+    password: string,
+    userData: {
+      first_name: string;
+      last_name: string;
+      role: 'patient' | 'doctor';
+      age?: number;
+      specialty?: string;
+    }
+  ) => {
+    setLoading(true);
     try {
-      console.log('Attempting sign up for email:', email);
-      setLoading(true);
-      
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
+      const { data, error } = await supabase.auth.signUp({
+        email: email,
+        password: password,
         options: {
-          data: userData,
-        },
+          data: userData
+        }
       });
-
       if (error) {
-        console.error('Sign up error:', error.message);
-        throw error;
+        console.error('Signup error:', error);
+        toast.error(error.message);
+      } else {
+        console.log('Signup successful:', data);
+        toast.success('Signup successful! Please check your email to verify your account.');
+        navigate('/');
       }
-
-      toast.success('Registration successful! Please check your email for verification.');
     } catch (error: any) {
-      console.error('Sign up catch block error:', error.message);
-      toast.error(error.message || 'Failed to sign up');
-      throw error;
+      console.error('Unexpected signup error:', error);
+      toast.error(error.message || 'An unexpected error occurred during signup.');
     } finally {
-      if (isMounted.current) setLoading(false);
+      setLoading(false);
+    }
+  };
+
+  const signIn = async (email: string, password: string) => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email,
+        password: password,
+      });
+      if (error) {
+        console.error('Signin error:', error);
+        toast.error(error.message);
+      } else {
+        console.log('Signin successful:', data);
+        toast.success('Signin successful!');
+      }
+    } catch (error: any) {
+      console.error('Unexpected signin error:', error);
+      toast.error(error.message || 'An unexpected error occurred during signin.');
+    } finally {
+      setLoading(false);
     }
   };
 
   const signOut = async () => {
+    setLoading(true);
     try {
-      console.log('Signing out...');
-      if (isSigningOut.current) {
-        console.log('Already signing out, ignoring duplicate request');
-        return;
-      }
-      
-      isSigningOut.current = true;
-      if (isMounted.current) setLoading(true);
-      
-      // First clear local state to ensure immediate UI update
-      clearAuthState();
-      
-      // Force remove all tokens from storage before calling signOut
-      // This is a more aggressive approach to ensure we clear everything
-      Object.keys(localStorage).forEach(key => {
-        if (key.includes('supabase') || key.includes('sb-') || key.includes('auth')) {
-          console.log(`Removing storage key: ${key}`);
-          localStorage.removeItem(key);
-        }
-      });
-      
-      // Also explicitly remove the main auth token
-      localStorage.removeItem('sb-irkihiedlszoufsjglhw-auth-token');
-      
-      // Then sign out from Supabase
-      const { error } = await supabase.auth.signOut({
-        scope: 'global' // Use global scope to sign out from all devices
-      });
-      
+      const { error } = await supabase.auth.signOut();
       if (error) {
-        console.error('Error during sign-out:', error);
-        throw error;
+        console.error('Signout error:', error);
+        toast.error(error.message);
+      } else {
+        console.log('Signout successful');
+        toast.success('Signout successful!');
+        navigate('/');
       }
-      
-      console.log('Successfully signed out from Supabase');
-      
-      // Force a browser storage clear one more time for all auth-related items
-      Object.keys(localStorage).forEach(key => {
-        if (key.includes('supabase') || key.includes('sb-') || key.includes('auth')) {
-          localStorage.removeItem(key);
-        }
-      });
-      
-      // Force reset the client
-      try {
-        // @ts-ignore - Access internal reset method
-        if (typeof supabase.auth._reset === 'function') {
-          // @ts-ignore
-          supabase.auth._reset();
-        }
-      } catch (e) {
-        console.error('Error resetting Supabase client:', e);
-      }
-      
-      // Force navigate to home page
-      navigate('/', { replace: true });
-      toast.success('Logged out successfully');
     } catch (error: any) {
-      console.error('Sign out error:', error);
-      toast.error(error.message || 'Failed to sign out');
-      // Still navigate to home even if there was an error
-      navigate('/', { replace: true });
+      console.error('Unexpected signout error:', error);
+      toast.error(error.message || 'An unexpected error occurred during signout.');
     } finally {
-      isSigningOut.current = false;
-      if (isMounted.current) setLoading(false);
+      setLoading(false);
     }
   };
 
+  const value = {
+    user,
+    profile,
+    signUp,
+    signIn,
+    signOut,
+    loading: loading || isProfileFetching,
+    isAuthenticated
+  };
+
   return (
-    <AuthContext.Provider
-      value={{
-        session,
-        user,
-        profile,
-        loading,
-        isAuthenticated,
-        signIn,
-        signUp,
-        signOut,
-      }}
-    >
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

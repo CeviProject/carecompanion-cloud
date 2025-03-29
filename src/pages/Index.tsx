@@ -5,14 +5,19 @@ import { Button } from '@/components/ui/button';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import { useAuth } from '@/context/AuthContext';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 const Index = () => {
   const { isAuthenticated, profile, loading } = useAuth();
   const navigate = useNavigate();
+  const [hasAttemptedRedirect, setHasAttemptedRedirect] = useState(false);
 
   useEffect(() => {
-    console.log('Index page - Auth state:', { isAuthenticated, profileExists: !!profile, loading });
+    console.log('Index page - Auth state:', { 
+      isAuthenticated, 
+      profileExists: !!profile, 
+      loading 
+    });
   }, [isAuthenticated, profile, loading]);
 
   const handleGetStarted = () => {
@@ -51,11 +56,22 @@ const Index = () => {
   };
 
   useEffect(() => {
-    if (!loading && isAuthenticated && profile) {
+    // Only attempt redirect once when authentication state is determined
+    if (!loading && isAuthenticated && profile && !hasAttemptedRedirect) {
       console.log('Auto-redirecting authenticated user to dashboard');
+      setHasAttemptedRedirect(true);
       navigate(`/dashboard/${profile.role || 'patient'}`);
     }
-  }, [isAuthenticated, profile, loading, navigate]);
+  }, [isAuthenticated, profile, loading, navigate, hasAttemptedRedirect]);
+
+  // Don't render anything during initial loading to prevent flash
+  if (loading && !hasAttemptedRedirect) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col">
