@@ -75,27 +75,42 @@ const HealthAssessment = ({
   const recommendations = extractSection(parsedAssessment || "", "recommendations");
   const warningSignsSection = extractSection(parsedAssessment || "", "warning signs");
   
+  // Clean text from markdown characters
+  const cleanMarkdown = (text: string): string => {
+    return text
+      .replace(/\*\*/g, '') // Remove double asterisks (bold)
+      .replace(/\*/g, '')   // Remove single asterisks (italic)
+      .replace(/__/g, '')   // Remove double underscores (bold)
+      .replace(/_/g, '')    // Remove single underscores (italic)
+      .replace(/`/g, '')    // Remove backticks (code)
+      .replace(/#{1,6}\s/g, '') // Remove heading markers
+      .replace(/\[(.*?)\]\((.*?)\)/g, '$1') // Remove links, keep text
+      .trim();
+  };
+  
   // Format a section into readable paragraphs and bullet points
   const formatSection = (text: string): JSX.Element[] => {
     if (!text) return [<p key="empty" className="text-sm italic">No information available</p>];
     
     return text.split('\n').filter(line => line.trim() !== '').map((paragraph, index) => {
+      const cleanedText = cleanMarkdown(paragraph);
+      
       // If it's a header with a colon
-      if (/^[A-Za-z\s]+:/.test(paragraph)) {
-        return <h4 key={index} className="text-md font-medium mt-3 mb-1">{paragraph}</h4>;
+      if (/^[A-Za-z\s]+:/.test(cleanedText)) {
+        return <h4 key={index} className="text-md font-medium mt-3 mb-1">{cleanedText}</h4>;
       }
       
       // If it's a bullet point
       if (/^[\*\-•]\s/.test(paragraph)) {
         return (
           <li key={index} className="ml-5 mb-2 text-sm">
-            {paragraph.replace(/^[\*\-•]\s/, '')}
+            {cleanMarkdown(paragraph.replace(/^[\*\-•]\s/, ''))}
           </li>
         );
       }
       
       // Regular paragraph
-      return <p key={index} className="mb-2 text-sm">{paragraph}</p>;
+      return <p key={index} className="mb-2 text-sm">{cleanedText}</p>;
     });
   };
 
@@ -157,7 +172,7 @@ const HealthAssessment = ({
             <div className="flex flex-wrap gap-2">
               {suggestedSpecialties.map((specialty, index) => (
                 <Badge key={index} variant="outline" className="bg-primary/10">
-                  {specialty}
+                  {cleanMarkdown(specialty)}
                 </Badge>
               ))}
             </div>
@@ -180,14 +195,14 @@ const HealthAssessment = ({
                 <div className="flex items-start">
                   <Building className="h-5 w-5 text-primary mr-2 mt-0.5" />
                   <div>
-                    <h4 className="font-medium">{hospital.name}</h4>
+                    <h4 className="font-medium">{cleanMarkdown(hospital.name)}</h4>
                     <p className="text-sm text-muted-foreground flex items-center mt-1">
                       <MapPin className="h-4 w-4 mr-1" /> 
-                      {hospital.address}
+                      {cleanMarkdown(hospital.address)}
                     </p>
                     {hospital.specialty && (
                       <p className="text-xs mt-1">
-                        <span className="font-medium">Specialty:</span> {hospital.specialty}
+                        <span className="font-medium">Specialty:</span> {cleanMarkdown(hospital.specialty)}
                       </p>
                     )}
                     {hospital.distance !== undefined && (
@@ -195,7 +210,7 @@ const HealthAssessment = ({
                         <span className="font-medium">Distance:</span>{' '}
                         {typeof hospital.distance === 'number' 
                           ? `${hospital.distance.toFixed(1)} km` 
-                          : hospital.distance}
+                          : cleanMarkdown(String(hospital.distance))}
                       </p>
                     )}
                   </div>

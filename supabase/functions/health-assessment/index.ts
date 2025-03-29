@@ -71,7 +71,7 @@ Please include:
 5. Recommended hospitals or clinics near ${patientData?.location || 'the patient'}:
    • List 3 recommended medical facilities with their specialties and approximate addresses
 
-Format your response in a helpful, clear manner that is informative but not alarming. Use bold formatting for section headers and bullet points for lists to improve readability.
+Format your response in a clear manner that is informative but not alarming. DO NOT use markdown formatting (no asterisks for bold or italics) to improve readability in our interface. Use simple text format with clear section headers and bullet points.
 `;
 
     console.log('Making request to Gemini API with prompt length:', prompt.length);
@@ -166,6 +166,19 @@ Format your response in a helpful, clear manner that is informative but not alar
   }
 });
 
+// Helper function to clean markdown formatting from text
+function cleanMarkdown(text: string): string {
+  return text
+    .replace(/\*\*/g, '') // Remove double asterisks (bold)
+    .replace(/\*/g, '')   // Remove single asterisks (italic)
+    .replace(/__/g, '')   // Remove double underscores (bold)
+    .replace(/_/g, '')    // Remove single underscores (italic)
+    .replace(/`/g, '')    // Remove backticks (code)
+    .replace(/#{1,6}\s/g, '') // Remove heading markers
+    .replace(/\[(.*?)\]\((.*?)\)/g, '$1') // Remove links, keep text
+    .trim();
+}
+
 function extractSuggestedSpecialties(assessment: string): string[] {
   const specialtiesMap: Record<string, string[]> = {
     'cardiology': ['heart', 'chest pain', 'palpitations', 'cardiovascular', 'cardiologist'],
@@ -207,7 +220,7 @@ function extractSuggestedSpecialties(assessment: string): string[] {
     return ['General Practice', 'Family Medicine'];
   }
 
-  return matchedSpecialties;
+  return matchedSpecialties.map(specialty => cleanMarkdown(specialty));
 }
 
 function extractRecommendedHospitals(assessment: string): Array<{ name: string, address: string, specialty: string }> {
@@ -284,9 +297,9 @@ function extractRecommendedHospitals(assessment: string): Array<{ name: string, 
         // If we have at least a name, add to hospitals
         if (name) {
           hospitals.push({ 
-            name, 
-            address: address || "Address not provided", 
-            specialty: specialty || ""
+            name: cleanMarkdown(name), 
+            address: cleanMarkdown(address || "Address not provided"), 
+            specialty: cleanMarkdown(specialty || "")
           });
         }
       }
@@ -335,9 +348,9 @@ function extractRecommendedHospitals(assessment: string): Array<{ name: string, 
         // If we have at least a name, add to hospitals
         if (name) {
           hospitals.push({ 
-            name, 
-            address: address || "Address not provided", 
-            specialty: specialty || ""
+            name: cleanMarkdown(name), 
+            address: cleanMarkdown(address || "Address not provided"), 
+            specialty: cleanMarkdown(specialty || "")
           });
         }
         
