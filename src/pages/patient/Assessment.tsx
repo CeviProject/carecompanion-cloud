@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from "@/components/ui/button";
@@ -19,21 +19,15 @@ const Assessment = () => {
   const [pastQueries, setPastQueries] = useState<HealthQuery[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('latest');
-  const [dataFetched, setDataFetched] = useState(false);
-  const fetchInProgress = useRef(false);
 
   useEffect(() => {
-    if (user && !dataFetched && !fetchInProgress.current) {
+    if (user) {
       fetchHealthQueries();
     }
-  }, [user, dataFetched]);
+  }, [user]);
 
   const fetchHealthQueries = async () => {
     try {
-      // Prevent multiple simultaneous fetch requests
-      if (fetchInProgress.current) return;
-      fetchInProgress.current = true;
-      
       setIsLoading(true);
       
       const { data, error } = await supabase
@@ -57,13 +51,10 @@ const Assessment = () => {
         setLatestQuery(null);
         setPastQueries([]);
       }
-      
-      setDataFetched(true);
     } catch (error: any) {
       console.error('Error in fetchHealthQueries:', error);
     } finally {
       setIsLoading(false);
-      fetchInProgress.current = false;
     }
   };
 
@@ -75,10 +66,6 @@ const Assessment = () => {
     setLatestQuery(query);
     setActiveTab('latest');
     window.scrollTo(0, 0);
-  };
-
-  const handleTabChange = (value: string) => {
-    setActiveTab(value);
   };
 
   return (
@@ -97,7 +84,7 @@ const Assessment = () => {
           </Button>
         </div>
 
-        <Tabs value={activeTab} onValueChange={handleTabChange}>
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="mb-4">
             <TabsTrigger value="latest">Latest Assessment</TabsTrigger>
             <TabsTrigger value="history">Assessment History</TabsTrigger>
