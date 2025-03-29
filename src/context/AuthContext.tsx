@@ -1,4 +1,3 @@
-
 import { createContext, useContext, useEffect, useState } from 'react';
 import { User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -63,14 +62,12 @@ const AuthProviderInternal = ({ children }: { children: React.ReactNode }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const { fetchProfile, isProfileFetching, profile } = useProfile();
   const navigate = useNavigate();
+  const [lastFetchedId, setLastFetchedId] = useState<string | null>(null);
 
   useEffect(() => {
     console.log('AuthProvider mounted, setting up auth state listener');
     let isInitializing = true;
     
-    // First check for existing session
-    console.log('Checking for existing session');
-
     // Set up auth state change listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
@@ -80,12 +77,17 @@ const AuthProviderInternal = ({ children }: { children: React.ReactNode }) => {
           setUser(session.user);
           setIsAuthenticated(true);
           
-          if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+          // Only fetch profile if the user ID changed or on specific events
+          // This prevents infinite fetching loops
+          if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && 
+              lastFetchedId !== session.user.id) {
+            setLastFetchedId(session.user.id);
             fetchProfile(session.user.id);
           }
         } else {
           setUser(null);
           setIsAuthenticated(false);
+          setLastFetchedId(null);
         }
         
         // Only set loading to false after both authentication and profile check
@@ -103,7 +105,12 @@ const AuthProviderInternal = ({ children }: { children: React.ReactNode }) => {
         if (session?.user) {
           setUser(session.user);
           setIsAuthenticated(true);
-          await fetchProfile(session.user.id);
+          
+          // Only fetch profile if we haven't already fetched for this user
+          if (lastFetchedId !== session.user.id) {
+            setLastFetchedId(session.user.id);
+            await fetchProfile(session.user.id);
+          }
         }
         
         // Always set loading to false after initialization is complete
@@ -122,7 +129,7 @@ const AuthProviderInternal = ({ children }: { children: React.ReactNode }) => {
     return () => {
       subscription.unsubscribe();
     };
-  }, [fetchProfile]);
+  }, [fetchProfile, lastFetchedId]);
 
   const signUp = async (
     email: string,

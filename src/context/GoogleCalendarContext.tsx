@@ -2,7 +2,13 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
-import { GoogleCalendarContextType } from '@/types/GoogleCalendarTypes';
+
+interface GoogleCalendarContextType {
+  isEnabled: boolean;
+  isLoading: boolean;
+  authorizeGoogleCalendar: () => Promise<void>;
+  getAccessToken: () => Promise<string | null>;
+}
 
 const GoogleCalendarContext = createContext<GoogleCalendarContextType>({
   isEnabled: false,
@@ -16,14 +22,17 @@ export const useGoogleCalendar = () => useContext(GoogleCalendarContext);
 export const GoogleCalendarProvider = ({ children }: { children: ReactNode }) => {
   const { user } = useAuth();
   const [isEnabled, setIsEnabled] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+  const [checkCounter, setCheckCounter] = useState(0);
 
+  // Only check status once when user changes or on initial load
   useEffect(() => {
-    if (user) {
+    if (user && checkCounter === 0) {
       checkGoogleCalendarStatus();
-    } else {
+      setCheckCounter(prev => prev + 1);
+    } else if (!user) {
       setIsEnabled(false);
-      setIsLoading(false);
+      setCheckCounter(0);
     }
   }, [user]);
 
@@ -52,6 +61,8 @@ export const GoogleCalendarProvider = ({ children }: { children: ReactNode }) =>
   };
 
   const authorizeGoogleCalendar = async () => {
+    if (!user) return;
+    
     try {
       setIsLoading(true);
       
@@ -80,6 +91,8 @@ export const GoogleCalendarProvider = ({ children }: { children: ReactNode }) =>
   };
 
   const getAccessToken = async (): Promise<string | null> => {
+    if (!user || !isEnabled) return null;
+    
     try {
       // Get access token from edge function
       const { data, error } = await supabase.functions.invoke('google-calendar-auth', {

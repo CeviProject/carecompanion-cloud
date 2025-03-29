@@ -6,16 +6,19 @@ import MedicationReminders from './MedicationReminders';
 // This is a wrapper component that provides the correct Google Calendar context properties
 // to the MedicationReminders component
 const MedicationRemindersWrapper = (props: any) => {
-  const googleCalendar = useGoogleCalendar();
+  const { isEnabled, isLoading, authorizeGoogleCalendar, getAccessToken } = useGoogleCalendar();
   
   // Use useMemo to prevent re-renders when googleCalendar hasn't changed
   const memoizedProps = useMemo(() => ({
     ...props,
-    googleCalendar
-  }), [props, googleCalendar.isEnabled, googleCalendar.isLoading]);
+    googleCalendar: {
+      isEnabled,
+      isLoading,
+      authorizeGoogleCalendar,
+      getAccessToken
+    }
+  }), [props, isEnabled, isLoading]);
   
-  // We're passing the needed properties from our context to make it compatible
-  // with what MedicationReminders expects
   return <MedicationReminders {...memoizedProps} />;
 };
 

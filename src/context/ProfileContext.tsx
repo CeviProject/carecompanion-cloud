@@ -28,8 +28,14 @@ const ProfileContext = createContext<ProfileContextType>({
 export const ProfileProvider = ({ children }: { children: React.ReactNode }) => {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isProfileFetching, setIsProfileFetching] = useState(false);
+  const [lastFetchedId, setLastFetchedId] = useState<string | null>(null);
 
   const fetchProfile = async (userId: string) => {
+    // Skip if we're already fetching this user's profile or if it's the same user
+    if (isProfileFetching || (lastFetchedId === userId && profile?.id === userId)) {
+      return;
+    }
+
     try {
       setIsProfileFetching(true);
       console.log('Fetching profile for user:', userId);
@@ -47,6 +53,7 @@ export const ProfileProvider = ({ children }: { children: React.ReactNode }) => 
       if (data) {
         console.log('Profile fetched:', data);
         setProfile(data as Profile);
+        setLastFetchedId(userId);
       } else {
         console.log('No profile found for user');
         setProfile(null);
