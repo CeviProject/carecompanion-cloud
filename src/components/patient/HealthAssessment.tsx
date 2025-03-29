@@ -147,7 +147,7 @@ const HealthAssessment = ({
       .filter(line => line.trim().startsWith('•') || line.trim().startsWith('-') || line.trim().startsWith('*'))
       .map(line => cleanMarkdown(line.trim().replace(/^[\*\-•]\s/, '')));
 
-  // Extract hospitals from the assessment if not provided
+  // Extract hospitals from the assessment if not provided and add distance property
   const extractedHospitals = recommendedHospitals || 
     extractSection(parsedAssessment || "", "recommended hospitals")
       .split('\n')
@@ -156,18 +156,24 @@ const HealthAssessment = ({
         const cleanedLine = cleanMarkdown(line.trim().replace(/^[\*\-•]\s/, ''));
         const parts = cleanedLine.split(':');
         
+        // Try to extract distance information if it exists in the text
+        const distanceMatch = cleanedLine.match(/(\d+(\.\d+)?)\s*km/i);
+        const distance = distanceMatch ? parseFloat(distanceMatch[1]) : undefined;
+        
         if (parts.length > 1) {
           return {
             name: parts[0].trim(),
             address: parts[1].trim(),
-            specialty: ''
-          };
+            specialty: '',
+            distance: distance
+          } as Hospital;
         } else {
           return {
             name: cleanedLine,
             address: 'Address not provided',
-            specialty: ''
-          };
+            specialty: '',
+            distance: distance
+          } as Hospital;
         }
       });
 
